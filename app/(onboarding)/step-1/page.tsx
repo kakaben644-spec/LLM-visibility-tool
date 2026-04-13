@@ -115,7 +115,7 @@ export default function Step1Page() {
 
       setBrandName(data.brand_name);
       setBrandUrl(data.brand_url);
-      router.push("/onboarding/step-2");
+      router.push("/step-2");
     } catch (err) {
       toast({
         title: "Une erreur est survenue",

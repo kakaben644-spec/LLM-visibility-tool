@@ -64,7 +64,7 @@ export default function Step2Page() {
     const brandUrl = getBrandUrl();
 
     if (!sessionToken || !brandName) {
-      router.replace("/onboarding/step-1");
+      router.replace("/step-1");
       return;
     }
 
@@ -227,7 +227,7 @@ export default function Step2Page() {
 
       <Button
         disabled={state.status !== "success" || !state.canContinue}
-        onClick={() => router.push("/onboarding/step-3")}
+        onClick={() => router.push("/step-3")}
         className="mt-4 w-full h-13 bg-[#6B54FA] hover:bg-[#5A43E8] text-white font-semibold rounded-xl text-[15px] disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continuer →
