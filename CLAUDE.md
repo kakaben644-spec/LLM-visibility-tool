@@ -81,19 +81,10 @@ Ne réécris pas le fichier entier — ajoute uniquement ce bloc à la fin.
 ✅ US-16 — Persistance onboarding (route session POST/PATCH/GET, lib/session.ts)
 ✅ US-23 — Architecture async LLM (routes audit/start, run-llm, status, rerun + lib/llm/*)
 ✅ US-01 — Saisie marque (Step 1 onboarding)
-🔲 US-02 — Génération prompts IA (Step 2) ← EN COURS
-🔲 US-03 — Sélection prompts (Step 2 suite)
-🔲 US-04 — Détection concurrents (Step 3)
+✅  US-02 — Génération prompts IA (Step 2) 
+✅  US-03 — Sélection prompts (Step 2 suite)
+✅  US-04 — Détection concurrents (Step 3)
 
-### US-01 — Découpage micro-étapes
-✅ 1A — Layout onboarding + panneau droit social proof
-        Fichier : /app/(onboarding)/layout.tsx
-✅ 1B — Composant StepIndicator (3 segments, labels, étape active)
-        Fichier : /components/features/onboarding/StepIndicator.tsx
-✅ 1C — Formulaire Step 1 : cards type compte + inputs (sans logique API)
-        Fichier : /app/(onboarding)/step-1/page.tsx
-✅ 1D — Connexion API : soumission → POST/PATCH session → redirect step-2
-        Fichier : /app/(onboarding)/step-1/page.tsx
 
 ### Règles de travail
 - Attendre "Go XX" avant chaque micro-étape
