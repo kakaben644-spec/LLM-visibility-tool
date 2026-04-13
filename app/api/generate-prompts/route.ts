@@ -143,14 +143,20 @@ export async function POST(req: NextRequest) {
     // 1. Generate prompts via Claude
     const prompts = await callClaudeForPrompts(brand_name, scraped_content);
 
-    // 2. Retrieve brand_id from onboarding_sessions
+    // 2. Retrieve brand fields from onboarding_sessions
     const supabase = getSupabaseAdmin();
 
     const { data: sessionData, error: sessionError } = await supabase
       .from("onboarding_sessions")
-      .select("id")
+      .select("id, brand_name, brand_url, brand_country, account_type")
       .eq("session_token", session_token)
-      .single<{ id: string }>();
+      .single<{
+        id: string;
+        brand_name: string | null;
+        brand_url: string | null;
+        brand_country: string;
+        account_type: string;
+      }>();
 
     if (sessionError || !sessionData) {
       throw notFound(
@@ -158,9 +164,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const brandId = sessionData.id;
+    // 3. Insert brand into brands table (required before inserting prompts — FK constraint)
+    const { data: brandData, error: brandError } = await supabase
+      .from("brands")
+      .insert({
+        name: sessionData.brand_name ?? brand_name,
+        url: sessionData.brand_url ?? "",
+        country: sessionData.brand_country ?? "France",
+        account_type: sessionData.account_type ?? "brand",
+        scraped_content: scraped_content,
+        user_id: null,
+      })
+      .select("id")
+      .single<{ id: string }>();
 
-    // 3. Insert prompts into the prompts table
+    if (brandError || !brandData) {
+      console.error("[POST /api/generate-prompts] Brand insert error:", brandError);
+      throw databaseError("Impossible de créer la marque.");
+    }
+
+    const brandId = brandData.id;
+
+    // 4. Insert prompts into the prompts table
     const promptRows = prompts.map((p) => ({
       brand_id: brandId,
       text: p.text,
