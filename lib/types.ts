@@ -204,6 +204,17 @@ export interface LLMCallResult {
   error?: string;
 }
 
+// ─── LLM Response (from llm_responses joined with prompts) ───────────────────
+
+export interface LlmResponse {
+  id: string;
+  prompt_id: string;
+  prompt_text: string;
+  llm_name: string;
+  response_text: string | null;
+  error: string | null;
+}
+
 // ─── Mention Analysis ─────────────────────────────────────────────────────────
 
 export interface MentionAnalysis {
