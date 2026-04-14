@@ -30,6 +30,8 @@ export default function Page() {
     prompts: Prompt[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [completedCalls, setCompletedCalls] = useState(0);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("session_token");
@@ -191,8 +193,54 @@ export default function Page() {
         return;
       }
 
-      localStorage.setItem("llmv_current_audit", auditId.trim());
-      setAuditData({ auditId: auditId.trim(), prompts });
+      const resolvedAuditId = auditId.trim();
+      const resolvedSessionData = { brandName: brandName.trim(), competitors };
+      localStorage.setItem("llmv_current_audit", resolvedAuditId);
+      setAuditData({ auditId: resolvedAuditId, prompts });
+
+      await startScan(resolvedAuditId, prompts, resolvedSessionData);
+    }
+
+    const LLM_NAMES = ["gpt-4o", "claude-sonnet", "gemini-pro"] as const;
+    const GLOBAL_TIMEOUT_MS = 60_000;
+
+    async function startScan(
+      auditId: string,
+      prompts: Prompt[],
+      sd: { brandName: string; competitors: Competitor[] }
+    ) {
+      const startTime = Date.now();
+
+      for (const prompt of prompts) {
+        for (const llm of LLM_NAMES) {
+          if (Date.now() - startTime >= GLOBAL_TIMEOUT_MS) {
+            setTimedOut(true);
+            return;
+          }
+
+          try {
+            await fetch("/api/audit/run-llm", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                audit_id: auditId,
+                prompt_id: prompt.id,
+                prompt_text: prompt.text,
+                llm_name: llm,
+                brand_name: sd.brandName,
+                competitors: sd.competitors,
+              }),
+            });
+          } catch (err) {
+            console.error(
+              `[startScan] Error for prompt ${prompt.id} / ${llm}:`,
+              err
+            );
+          }
+
+          setCompletedCalls((prev) => prev + 1);
+        }
+      }
     }
 
     run();
