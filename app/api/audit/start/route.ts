@@ -29,7 +29,9 @@ const selectedPromptSchema = z.object({
 
 const competitorItemSchema = z.object({
   name: z.string().min(1),
-  domain: z.string().min(1),
+  // The onboarding session stores competitors as { name, url } (set by detect-competitors).
+  // The DB column is `domain`, so we accept `url` here and remap on insert.
+  url: z.string().min(1),
 });
 
 // ---------------------------------------------------------------------------
@@ -155,7 +157,7 @@ export async function POST(req: NextRequest) {
         parsedCompetitors.map((c) => ({
           brand_id: brandId,
           name: c.name,
-          domain: c.domain,
+          domain: c.url,
           auto_detected: true,
         }))
       );
