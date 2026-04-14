@@ -17,6 +17,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: ".",
+  },
   images: {
     remotePatterns: [
       new URL("https://logo.clearbit.com/**"),
