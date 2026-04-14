@@ -132,9 +132,8 @@ export default function ScanningPage() {
         body: JSON.stringify({ session_token: sessionToken }),
       });
 
-      const startJson = (await startRes.json()) as
-        | StartAuditSuccess
-        | ApiFailure;
+      const startData = await startRes.json()
+      const startJson = startData as StartAuditSuccess | ApiFailure;
 
       if (!startJson.ok) {
         setState({

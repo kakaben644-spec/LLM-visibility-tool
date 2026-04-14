@@ -18,7 +18,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   turbopack: {
-    root: ".",
+    // node_modules lives in the parent repo root, not this worktree directory.
+    // Turbopack must resolve packages from there.
+    root: "/Users/karide/llm-visibility-tool",
   },
   images: {
     remotePatterns: [
