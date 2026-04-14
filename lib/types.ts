@@ -71,6 +71,21 @@ export interface LlmResult {
 
 // ─── Scores ────────────────────────────────────────────────────────────────────
 
+export interface ScoreRankingEntry {
+  entity_name: string;
+  entity_type: "brand" | "competitor";
+  total_score: number;
+  score_gpt4o: number;
+  score_claude: number;
+  score_gemini: number;
+}
+
+export interface AuditScoreApiData {
+  brand_name: string;
+  brand_score: number;
+  ranking: ScoreRankingEntry[];
+}
+
 export interface ScoreBreakdown {
   visibility: number;      // 0–100 : fréquence de mention
   recommendation: number;  // 0–100 : fréquence de recommandation

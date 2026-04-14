@@ -3,19 +3,20 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { AuditScores, LlmResponse } from "@/lib/types";
+import type { AuditScoreApiData, LlmResponse } from "@/lib/types";
+import { ScoreCard } from "@/components/features/dashboard/ScoreCard";
 
 // ---------------------------------------------------------------------------
 // Local interfaces
 // ---------------------------------------------------------------------------
 
 interface ScoreApiResponse {
-  data: {
-    scores: AuditScores;
-  };
+  ok: true;
+  data: AuditScoreApiData;
 }
 
 interface ResponsesApiResponse {
+  ok: true;
   data: {
     responses: LlmResponse[];
   };
@@ -30,7 +31,7 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scores, setScores] = useState<AuditScores | null>(null);
+  const [scoreData, setScoreData] = useState<AuditScoreApiData | null>(null);
   const [responses, setResponses] = useState<LlmResponse[]>([]);
 
   useEffect(() => {
@@ -53,9 +54,10 @@ export default function DashboardPage() {
         }
 
         const scoreJson = (await scoreRes.json()) as ScoreApiResponse;
-        const responsesJson = (await responsesRes.json()) as ResponsesApiResponse;
+        const responsesJson =
+          (await responsesRes.json()) as ResponsesApiResponse;
 
-        setScores(scoreJson.data.scores);
+        setScoreData(scoreJson.data);
         setResponses(responsesJson.data.responses);
       } catch {
         setError("Impossible de charger les résultats");
@@ -85,10 +87,13 @@ export default function DashboardPage() {
 
   return (
     <main className="container mx-auto py-8 space-y-8">
-      <div className="rounded-lg border p-6">
-        <p className="text-muted-foreground">ScoreCard ici</p>
-        {/* scores available: {JSON.stringify(scores?.global)} */}
-      </div>
+      {scoreData && (
+        <ScoreCard
+          brandName={scoreData.brand_name}
+          brandScore={scoreData.brand_score}
+          ranking={scoreData.ranking}
+        />
+      )}
 
       <div className="rounded-lg border p-6">
         <p className="text-muted-foreground">Benchmark ici</p>
