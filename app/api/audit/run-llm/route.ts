@@ -97,13 +97,16 @@ export async function POST(req: NextRequest) {
       input.competitors.map((c) => c.name)
     );
 
-    // d) INSERT mention_results
+    // d) INSERT mention_results (soft-fail : une erreur ici ne bloque pas l'audit)
     if (mentions.length > 0) {
       const { error: mentionError } = await supabase
         .from("mention_results")
         .insert(
           mentions.map((m) => ({
             llm_response_id: llmResponse.id,
+            audit_id: input.audit_id,
+            prompt_id: input.prompt_id,
+            llm_name: input.llm_name,
             entity_name: m.entity_name,
             entity_type: m.entity_type,
             is_mentioned: m.is_mentioned,
@@ -114,7 +117,7 @@ export async function POST(req: NextRequest) {
 
       if (mentionError) {
         console.error("[audit/run-llm] mention_results insert error:", mentionError);
-        throw databaseError("Impossible d'enregistrer les mentions.");
+        // Ne pas throw : l'échec des mentions ne doit pas bloquer le flux d'audit
       }
     }
 
