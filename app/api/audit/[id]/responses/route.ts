@@ -31,7 +31,7 @@ interface LlmResponseRow {
   response_text: string | null;
   error: string | null;
   prompts: {
-    prompt_text: string;
+    text: string;
   };
 }
 
@@ -57,7 +57,7 @@ export async function GET(
          llm_name,
          response_text,
          error,
-         prompts!inner ( prompt_text )`
+         prompts!inner ( text )`
       )
       .eq("audit_id", auditId)
       .order("prompt_id", { ascending: true });
@@ -75,7 +75,7 @@ export async function GET(
     const responses: LlmResponse[] = rows.map((row) => ({
       id: row.id,
       prompt_id: row.prompt_id,
-      prompt_text: row.prompts.prompt_text,
+      prompt_text: row.prompts.text,
       llm_name: row.llm_name,
       response_text: row.response_text,
       error: row.error,
