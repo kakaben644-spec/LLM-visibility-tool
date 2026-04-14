@@ -1,21 +1,15 @@
 import type { MentionAnalysis } from "@/lib/types";
 
-interface DetectMentionsParams {
-  responseText: string;
-  brandName: string;
-  competitors: Array<{ name: string; domain: string }>;
+interface EntityOccurrence {
+  entity_name: string;
+  entity_type: "brand" | "competitor";
+  firstIdx: number;
+  mention_count: number;
 }
 
-function analyzeEntity(
-  responseText: string,
-  name: string,
-  entityType: "brand" | "competitor"
-): MentionAnalysis {
-  const lower = responseText.toLowerCase();
-  const nameLower = name.toLowerCase();
-  const totalLength = responseText.length;
-
-  let mentionCount = 0;
+function countOccurrences(text: string, nameLower: string): { firstIdx: number; count: number } {
+  const lower = text.toLowerCase();
+  let count = 0;
   let firstIdx = -1;
   let searchIdx = 0;
 
@@ -23,34 +17,49 @@ function analyzeEntity(
     const found = lower.indexOf(nameLower, searchIdx);
     if (found === -1) break;
     if (firstIdx === -1) firstIdx = found;
-    mentionCount++;
+    count++;
     searchIdx = found + nameLower.length;
   }
 
-  const isMentioned = mentionCount > 0;
-
-  // Position : rang approximatif 1-10 basé sur la position relative dans le texte
-  const position =
-    isMentioned && totalLength > 0
-      ? Math.round((firstIdx / totalLength) * 10) + 1
-      : null;
-
-  return {
-    entity_name: name,
-    entity_type: entityType,
-    is_mentioned: isMentioned,
-    position,
-    mention_count: mentionCount,
-  };
+  return { firstIdx, count };
 }
 
-export function detectMentions({
-  responseText,
-  brandName,
-  competitors,
-}: DetectMentionsParams): MentionAnalysis[] {
-  return [
-    analyzeEntity(responseText, brandName, "brand"),
-    ...competitors.map((c) => analyzeEntity(responseText, c.name, "competitor")),
+export function detectMentions(
+  text: string,
+  brandName: string,
+  competitors: string[]
+): MentionAnalysis[] {
+  const entities: Array<{ name: string; type: "brand" | "competitor" }> = [
+    { name: brandName, type: "brand" },
+    ...competitors.map((c) => ({ name: c, type: "competitor" as const })),
   ];
+
+  // Collect occurrence data for each entity
+  const occurrences: EntityOccurrence[] = entities.map(({ name, type }) => {
+    const { firstIdx, count } = countOccurrences(text, name.toLowerCase());
+    return {
+      entity_name: name,
+      entity_type: type,
+      firstIdx,
+      mention_count: count,
+    };
+  });
+
+  // Rank mentioned entities by position of first occurrence (ascending)
+  const mentioned = occurrences
+    .filter((e) => e.firstIdx !== -1)
+    .sort((a, b) => a.firstIdx - b.firstIdx);
+
+  const positionMap = new Map<string, number>();
+  mentioned.forEach((e, idx) => {
+    positionMap.set(e.entity_name, idx + 1);
+  });
+
+  return occurrences.map((e) => ({
+    entity_name: e.entity_name,
+    entity_type: e.entity_type,
+    is_mentioned: e.mention_count > 0,
+    mention_count: e.mention_count,
+    position: positionMap.get(e.entity_name) ?? null,
+  }));
 }

@@ -91,11 +91,11 @@ export async function POST(req: NextRequest) {
     }
 
     // c) Analyser les mentions (brand + concurrents)
-    const mentions = detectMentions({
-      responseText: llmResult.response_text,
-      brandName: input.brand_name,
-      competitors: input.competitors,
-    });
+    const mentions = detectMentions(
+      llmResult.response_text,
+      input.brand_name,
+      input.competitors.map((c) => c.name)
+    );
 
     // d) INSERT mention_results
     if (mentions.length > 0) {
