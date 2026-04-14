@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Competitor {
@@ -32,6 +32,12 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const [completedCalls, setCompletedCalls] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
+  const [pollData, setPollData] = useState<{
+    status: string;
+    progressPct: number;
+    completedLlms: string[];
+    failedLlms: string[];
+  } | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("session_token");
@@ -246,6 +252,57 @@ export default function Page() {
     run();
   }, [router]);
 
+  // Polling effect — starts once auditData is available
+  useEffect(() => {
+    if (!auditData) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/audit/${auditData.auditId}/status`);
+        if (!res.ok) {
+          console.error("[polling] non-2xx response:", res.status);
+          return;
+        }
+        const json: unknown = await res.json();
+
+        const payload =
+          json !== null &&
+          typeof json === "object" &&
+          "data" in json
+            ? (json as { data: unknown }).data
+            : json;
+
+        if (payload === null || typeof payload !== "object") return;
+
+        const p = payload as Record<string, unknown>;
+        const status = typeof p["status"] === "string" ? p["status"] : "";
+        const progressPct =
+          typeof p["progress_pct"] === "number" ? p["progress_pct"] : 0;
+        const completedLlms = Array.isArray(p["completed_llms"])
+          ? (p["completed_llms"] as unknown[]).filter(
+              (x): x is string => typeof x === "string"
+            )
+          : [];
+        const failedLlms = Array.isArray(p["failed_llms"])
+          ? (p["failed_llms"] as unknown[]).filter(
+              (x): x is string => typeof x === "string"
+            )
+          : [];
+
+        setPollData({ status, progressPct, completedLlms, failedLlms });
+
+        if (status === "completed") {
+          clearInterval(intervalId);
+          router.replace("/dashboard");
+        }
+      } catch (err) {
+        console.error("[polling] fetch error:", err);
+      }
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [auditData, router]);
+
   if (error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
@@ -258,13 +315,101 @@ export default function Page() {
     );
   }
 
+  const LLM_LABELS: { key: string; label: string }[] = [
+    { key: "gpt-4o", label: "GPT-4o" },
+    { key: "claude-sonnet", label: "Claude" },
+    { key: "gemini-pro", label: "Gemini" },
+  ];
+
+  const totalCalls = (auditData?.prompts.length ?? 0) * 3;
+  const progressPct = pollData?.progressPct ?? 0;
+
+  function LlmBadge({ llmKey, label }: { llmKey: string; label: string }) {
+    const done = pollData?.completedLlms.includes(llmKey) ?? false;
+    const failed = pollData?.failedLlms.includes(llmKey) ?? false;
+
+    return (
+      <div className="flex flex-col items-center gap-1">
+        {done ? (
+          <CheckCircle2 className="h-5 w-5 text-green-500" />
+        ) : failed ? (
+          <XCircle className="h-5 w-5 text-destructive" />
+        ) : (
+          <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
+        )}
+        <span
+          className={
+            done
+              ? "text-xs font-medium text-green-600"
+              : failed
+                ? "text-xs font-medium text-destructive"
+                : "text-xs text-muted-foreground"
+          }
+        >
+          {label}
+        </span>
+      </div>
+    );
+  }
+
+  let statusText: string;
+  if (timedOut) {
+    statusText =
+      "Délai dépassé — certains résultats sont peut-être incomplets.";
+  } else if (!pollData) {
+    statusText = "Initialisation de l'analyse...";
+  } else {
+    statusText = `Interrogation des LLMs... (${completedCalls} / ${totalCalls} prompts traités)`;
+  }
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      <h1 className="text-2xl font-semibold">Analyse en cours...</h1>
-      <p className="text-muted-foreground text-center">
-        Nous interrogeons les LLMs, merci de patienter.
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-4">
+      {/* A — Brand + LLM logos row */}
+      <div className="flex flex-col items-center gap-4">
+        <div className="rounded-full bg-primary/10 px-5 py-2 text-base font-semibold text-primary ring-1 ring-primary/20">
+          {sessionData?.brandName ?? "…"}
+        </div>
+        <div className="flex gap-6">
+          {LLM_LABELS.map(({ key, label }) => (
+            <LlmBadge key={key} llmKey={key} label={label} />
+          ))}
+        </div>
+      </div>
+
+      {/* B — Progress bar */}
+      <div className="w-full max-w-sm">
+        <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+          <span>Progression</span>
+          <span>{progressPct}%</span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all duration-500"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* C — Status text */}
+      <p className="text-center text-sm text-muted-foreground max-w-xs">
+        {statusText}
       </p>
+
+      {/* D — Timeout warning */}
+      {timedOut && (
+        <div className="w-full max-w-sm rounded-lg border border-amber-300 bg-amber-50 p-4 text-center">
+          <p className="mb-3 text-sm text-amber-800">
+            L&apos;analyse a pris trop de temps. Les résultats partiels sont
+            disponibles.
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => router.replace("/dashboard")}
+          >
+            Voir les résultats
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
