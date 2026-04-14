@@ -9,6 +9,8 @@ import {
   setCurrentAuditId,
 } from "@/lib/session";
 
+// getBrandName is called only inside useEffect (run()), never in the render body.
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -71,7 +73,7 @@ interface StatusSuccess {
 
 type PageState =
   | { phase: "init" }
-  | { phase: "starting" }
+  | { phase: "starting"; brandName: string }
   | {
       phase: "running";
       auditId: string;
@@ -118,7 +120,7 @@ export default function ScanningPage() {
     }
 
     // ── Step 1: Start audit ────────────────────────────────────────────────
-    setState({ phase: "starting" });
+    setState({ phase: "starting", brandName });
 
     let auditId: string;
     let prompts: StartAuditPrompt[];
@@ -307,9 +309,11 @@ export default function ScanningPage() {
   })();
 
   const brandName: string =
-    state.phase === "running" || state.phase === "polling"
+    state.phase === "running" ||
+    state.phase === "polling" ||
+    state.phase === "starting"
       ? state.brandName
-      : getBrandName() ?? "";
+      : "";
 
   // ── Error state ──────────────────────────────────────────────────────────
 
