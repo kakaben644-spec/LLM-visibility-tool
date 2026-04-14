@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 
 import type { AuditScoreApiData, LlmResponse } from "@/lib/types";
 import { ScoreCard } from "@/components/features/dashboard/ScoreCard";
+import { ResponseAccordion } from "@/components/features/dashboard/ResponseAccordion";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // ---------------------------------------------------------------------------
 // Local interfaces
@@ -22,6 +25,12 @@ interface ResponsesApiResponse {
   };
 }
 
+// Shape stored in localStorage under "llmv_session"
+interface SessionCache {
+  brand_name?: string;
+  competitors?: string[];
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard Page
 // ---------------------------------------------------------------------------
@@ -33,6 +42,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [scoreData, setScoreData] = useState<AuditScoreApiData | null>(null);
   const [responses, setResponses] = useState<LlmResponse[]>([]);
+  const [competitors, setCompetitors] = useState<string[]>([]);
 
   useEffect(() => {
     const auditId = localStorage.getItem("llmv_current_audit");
@@ -40,6 +50,17 @@ export default function DashboardPage() {
     if (!auditId) {
       router.replace("/step-1");
       return;
+    }
+
+    // Read competitors from the cached session if available
+    try {
+      const raw = localStorage.getItem("llmv_session");
+      if (raw) {
+        const session = JSON.parse(raw) as SessionCache;
+        setCompetitors(session.competitors ?? []);
+      }
+    } catch {
+      // ignore parse errors — competitors will be empty
     }
 
     async function load() {
@@ -59,6 +80,14 @@ export default function DashboardPage() {
 
         setScoreData(scoreJson.data);
         setResponses(responsesJson.data.responses);
+
+        // Prefer competitors from the score API ranking if present
+        const competitorNames = scoreJson.data.ranking
+          .filter((e) => e.entity_type === "competitor")
+          .map((e) => e.entity_name);
+        if (competitorNames.length > 0) {
+          setCompetitors(competitorNames);
+        }
       } catch {
         setError("Impossible de charger les résultats");
       } finally {
@@ -85,11 +114,13 @@ export default function DashboardPage() {
     );
   }
 
+  const brandName = scoreData?.brand_name ?? "";
+
   return (
     <main className="container mx-auto py-8 space-y-8">
       {scoreData && (
         <ScoreCard
-          brandName={scoreData.brand_name}
+          brandName={brandName}
           brandScore={scoreData.brand_score}
           ranking={scoreData.ranking}
         />
@@ -99,9 +130,25 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Benchmark ici</p>
       </div>
 
-      <div className="rounded-lg border p-6">
-        <p className="text-muted-foreground">Accordion ici</p>
-        {/* responses available: {responses.length} */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Détail des réponses LLM
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponseAccordion
+            responses={responses}
+            brandName={brandName}
+            competitors={competitors}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-center pb-4">
+        <Button asChild variant="default" size="lg">
+          <a href="#">Voir les recommandations</a>
+        </Button>
       </div>
     </main>
   );
