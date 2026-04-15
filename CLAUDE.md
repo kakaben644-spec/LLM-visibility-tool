@@ -1,5 +1,3 @@
-@AGENTS.md
-
 # LLM Visibility Tool — Contexte Projet
 
 ## Description
@@ -14,13 +12,12 @@ SaaS B2B qui aide les marques à mesurer leur visibilité dans les LLMs (GPT-4o,
 
 ## Architecture des dossiers
 
-```
-/app/(marketing)/page.tsx            → Landing page
-/app/(onboarding)/step-1/page.tsx    → Étape 1 onboarding
-/app/(onboarding)/step-2/page.tsx    → Étape 2 onboarding
-/app/(onboarding)/step-3/page.tsx    → Étape 3 onboarding
-/app/(onboarding)/scanning/page.tsx  → Page de scan
-/app/(dashboard)/page.tsx            → Dashboard principal
+/app/(marketing)/page.tsx
+/app/(onboarding)/step-1/page.tsx
+/app/(onboarding)/step-2/page.tsx
+/app/(onboarding)/step-3/page.tsx
+/app/(onboarding)/scanning/page.tsx
+/app/(dashboard)/dashboard/page.tsx
 
 /app/api/onboarding/session/route.ts
 /app/api/scrape/route.ts
@@ -29,6 +26,8 @@ SaaS B2B qui aide les marques à mesurer leur visibilité dans les LLMs (GPT-4o,
 /app/api/audit/start/route.ts
 /app/api/audit/run-llm/route.ts
 /app/api/audit/[id]/status/route.ts
+/app/api/audit/[id]/score/route.ts
+/app/api/audit/[id]/responses/route.ts
 /app/api/audit/[id]/rerun/route.ts
 /app/api/recommendations/route.ts
 /app/api/export/pdf/route.ts
@@ -43,66 +42,93 @@ SaaS B2B qui aide les marques à mesurer leur visibilité dans les LLMs (GPT-4o,
 /lib/utils/score.ts
 /lib/utils/mentions.ts
 /lib/utils/api-error.ts
+/lib/session.ts
 
 /supabase/migrations/001_init.sql
 /supabase/migrations/002_complements.sql
-```
+/supabase/migrations/004_scores.sql
+
+/components/features/dashboard/ScoreCard.tsx
+/components/features/dashboard/ResponseAccordion.tsx
+/components/features/dashboard/HighlightedText.tsx
 
 ## Contraintes Strictes
-- TypeScript strict, **zéro `any`**
+- TypeScript strict, zéro `any`
 - Zod validation côté client ET serveur sur toutes les routes API
 - `export const maxDuration = 8` sur toutes les routes API qui appellent des LLMs
 - Toutes les clés API depuis `process.env` uniquement (jamais hardcodées)
-- **Langue : 100% français dans l'UI**
+- Langue : 100% français dans l'UI
 - Pas de compte utilisateur pour le MVP — session via `session_token` en localStorage
 - Clerk V2 uniquement (pas V1)
+- MVP sans auth : ne jamais insérer user_id dans onboarding_sessions ni dans brands
+- migrate_session() existe en DB mais n'est pas appelée dans le MVP
+- Ne pas importer ni référencer @clerk/nextjs dans le code MVP
 
-## Variables d'Environnement Requises
-Voir `.env.example` à la racine.
-
-## Notes d'implémentation
-- Utiliser `next/font/google` pour Sora et DM Sans
-- Images externes : `logo.clearbit.com` autorisé via `remotePatterns`
-- Headers de sécurité définis dans `next.config.ts`
-Bonne idée. Je mets à jour `CLAUDE.md` directement via Claude Code — donne ce prompt :
-
+## Démarrage du serveur de dev
+⚠️ Claude Desktop injecte `ANTHROPIC_API_KEY=""` dans l'environnement macOS.
+Ne jamais lancer `npm run dev` directement — utiliser :
+```bash
+npm run dev:local
 ```
-Ajoute cette section à la fin du fichier CLAUDE.md existant.
-Ne réécris pas le fichier entier — ajoute uniquement ce bloc à la fin.
+Ce script (`start-dev.sh`) lit les clés depuis `.env.local` et les exporte avant de démarrer Next.js.
 
----
+## Supabase — tables existantes
+- onboarding_sessions, brands, competitors, prompts
+- audits, llm_responses, mention_results
+- scores — colonnes : id, audit_id, brand_id, entity_name, entity_type,
+  total_score, mention_rate, avg_position, sentiment_score,
+  score_gpt4o, score_claude, score_gemini, created_at
+- recommendations
 
-## Plan de travail immédiat
+## Migrations appliquées
+- 001_init.sql ✅
+- 002_complements.sql ✅
+- 004_scores.sql ✅
+Note : il n'existe pas de 003 — la numérotation saute de 002 à 004.
 
-### Statut global Sprint 1
-✅ US-20 — Setup projet (CLAUDE.md, .env, next.config, structure)
-✅ US-00 — Schéma DB Supabase (10 tables, migrations 001 + 002)
-✅ US-22 — Compléments SQL (triggers, migrate_session, CHECK)
-✅ US-16 — Persistance onboarding (route session POST/PATCH/GET, lib/session.ts)
-✅ US-23 — Architecture async LLM (routes audit/start, run-llm, status, rerun + lib/llm/*)
-✅ US-01 — Saisie marque (Step 1 onboarding)
-✅  US-02 — Génération prompts IA (Step 2) 
-✅  US-03 — Sélection prompts (Step 2 suite)
-✅  US-04 — Détection concurrents (Step 3)
+## Statut Sprint 1 ✅ terminé
+- US-20 Setup projet ✅
+- US-00 Schéma DB ✅
+- US-22 Compléments SQL ✅
+- US-16 Persistance onboarding ✅
+- US-23 Architecture async LLM ✅
+- US-01 Saisie marque ✅
+- US-02 Génération prompts ✅
+- US-03 Sélection prompts ✅
+- US-04 Détection concurrents ✅
 
+## Statut Sprint 2
+- US-17 Page /scanning ✅
+- US-06 Détection mentions ✅
+- US-07 Score de visibilité ✅
+- US-08 Dashboard résultats ✅
+- US-19 Erreurs et toasts ✅ 
+- US-21 Sécurité API / rate limiting  ✅ 
+- US-18 Relancer un audit ← prochaine
 
-### Règles de travail
-- Attendre "Go XX" avant chaque micro-étape
+## Points techniques importants (bugs résolus)
+- `selected_prompts` doit être écrit dans step-2 en même temps que `generated_prompts`
+- Schema mismatch corrigé : competitors stockés `{ name, url }` mais audit/start attendait `{ name, domain }` — aligné sur `url` dans le Zod schema, mappé vers `domain` à l'insert
+- `app/(dashboard)/dashboard/page.tsx` (et non `/dashboard/page.tsx`)
+- Route `GET /api/audit/[id]/score` créée en US-08 (n'existait pas avant)
+- Route `GET /api/audit/[id]/responses` — colonne DB est `text` (pas `prompt_text`)
+- Hydration crash corrigé : ne jamais appeler getBrandName() dans le render body, uniquement dans useEffect
+
+## localStorage keys
+- `llmv_session` → session_token UUID
+- `llmv_brand_name` → nom de la marque
+- `llmv_brand_url` → URL de la marque
+- `llmv_current_audit` → audit_id en cours
+
+## Règles de travail Claude Code
 - Ne modifier que les fichiers listés à chaque étape
-- Si modification d'un fichier existant : diff uniquement, pas réécriture
+- Si modification d'un fichier existant : diff uniquement, pas réécriture complète
 - tsc --noEmit à la fin de chaque étape
-- Mettre à jour cette section à chaque étape complétée
-- MVP sans auth : ne jamais insérer user_id dans onboarding_sessions
-  ni dans brands — ce champ reste NULL jusqu'à l'activation de Clerk
-  en V2. Ne pas importer ni référencer @clerk/nextjs dans le code MVP.
-- migrate_session() existe en DB mais n'est pas appelée dans le MVP.
-```
-## Règles de génération des prompts Claude Code
+- Attendre validation avant chaque micro-étape suivante
+- Tous les prompts Claude Code en anglais
+- Commit message format : feat: [US-XX étape] — description courte
 
-### Format selon la position de la sous-tâche
-- **1ère sous-tâche d'une US** → prompt complet : stack, contraintes globales, contexte projet, comportement attendu, when done
-- **Sous-tâches suivantes dans la même session Claude Code** → prompt allégé : comportement attendu + when done uniquement (Claude Code a déjà le contexte en session)
-
-### Langue
-- Tous les prompts Claude Code sont rédigés en anglais
-- Les chaînes UI dans le code restent en français
+## When done (à inclure dans chaque prompt Claude Code)
+- Run `tsc --noEmit` and fix any type errors before finishing.
+- Commit with message: "feat: [étape ID] — description courte"
+- Do not push, do not create a PR.
