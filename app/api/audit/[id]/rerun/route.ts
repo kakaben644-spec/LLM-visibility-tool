@@ -51,7 +51,7 @@ export async function POST(
 
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {
-      throw new Error("Corps de la requête manquant");
+      return errorResponse("Corps de la requête manquant", "VALIDATION_ERROR", 400);
     }
     bodySchema.parse(body);
 
@@ -65,7 +65,7 @@ export async function POST(
       .single<AuditRow>();
 
     if (auditError || !audit) {
-      throw notFound("Audit introuvable.");
+      return notFound("Audit introuvable.");
     }
 
     // b) Récupérer les prompts actifs liés au brand_id
@@ -76,7 +76,7 @@ export async function POST(
       .eq("is_active", true);
 
     if (promptsError) {
-      throw databaseError("Impossible de récupérer les prompts.");
+      return databaseError("Impossible de récupérer les prompts.");
     }
 
     const promptRows = (prompts ?? []) as PromptRow[];
@@ -94,7 +94,7 @@ export async function POST(
 
     if (newAuditError || !newAudit) {
       console.error("[audit/rerun] audit insert error:", newAuditError);
-      throw databaseError("Impossible de créer le nouvel audit.");
+      return databaseError("Impossible de créer le nouvel audit.");
     }
 
     return successResponse(

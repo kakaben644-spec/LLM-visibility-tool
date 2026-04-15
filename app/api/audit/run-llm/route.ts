@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   try {
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {
-      throw new Error("Corps de la requête manquant");
+      return errorResponse("Corps de la requête manquant", "VALIDATION_ERROR", 400);
     }
 
     const input = bodySchema.parse(body);
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
     if (llmResponseError || !llmResponse) {
       console.error("[audit/run-llm] llm_response insert error:", llmResponseError);
-      throw databaseError("Impossible d'enregistrer la réponse LLM.");
+      return databaseError("Impossible d'enregistrer la réponse LLM.");
     }
 
     // c) Analyser les mentions (brand + concurrents)
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
 
       if (mentionError) {
         console.error("[audit/run-llm] mention_results insert error:", mentionError);
-        throw databaseError("Impossible d'enregistrer les mentions.");
+        return databaseError("Impossible d'enregistrer les mentions.");
       }
     }
 

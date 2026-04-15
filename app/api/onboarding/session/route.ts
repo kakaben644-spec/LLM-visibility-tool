@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     if (error || !data) {
       console.error("[POST /onboarding/session] Supabase error:", error);
-      throw databaseError(
+      return databaseError(
         "Impossible de créer la session. Réessaie dans quelques instants."
       );
     }
@@ -113,7 +113,7 @@ export async function PATCH(req: NextRequest) {
     const body: unknown = await req.json().catch(() => null);
 
     if (body === null) {
-      return errorResponse(new Error("Corps de la requête invalide ou vide"));
+      return errorResponse("Corps de la requête invalide ou vide", "VALIDATION_ERROR", 400);
     }
 
     const input = patchBodySchema.parse(body);
@@ -145,12 +145,12 @@ export async function PATCH(req: NextRequest) {
 
     if (error) {
       console.error("[PATCH /onboarding/session] Supabase error:", error);
-      throw databaseError("Impossible de mettre à jour la session.");
+      return databaseError("Impossible de mettre à jour la session.");
     }
 
     if (count === 0) {
       // Aucune ligne affectée = session not found ou already completed
-      throw notFound(
+      return notFound(
         "Session introuvable, expirée ou déjà terminée. Crée une nouvelle session."
       );
     }
@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
 
     if (error || !data) {
       // Supabase renvoie une erreur PGRST116 quand aucune ligne n'est trouvée
-      throw notFound(
+      return notFound(
         "Session introuvable ou expirée. Merci de recommencer l'onboarding."
       );
     }

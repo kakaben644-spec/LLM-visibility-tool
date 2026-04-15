@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       }>();
 
     if (sessionError || !session) {
-      throw notFound(
+      return notFound(
         "Session introuvable ou expirée. Merci de recommencer l'onboarding."
       );
     }
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
 
     if (updateError) {
       console.error("[POST /api/detect-competitors] Supabase update error:", updateError);
-      throw databaseError("Impossible d'enregistrer les concurrents détectés.");
+      return databaseError("Impossible d'enregistrer les concurrents détectés.");
     }
 
     return successResponse({ competitors });

@@ -50,7 +50,7 @@ export async function GET(
       .single<AuditRow>();
 
     if (auditError || !audit) {
-      throw notFound("Audit introuvable.");
+      return notFound("Audit introuvable.");
     }
 
     // b) Compter les llm_responses pour cet audit
@@ -60,7 +60,7 @@ export async function GET(
       .eq("audit_id", auditId);
 
     if (responsesError) {
-      throw databaseError("Impossible de récupérer les réponses LLM.");
+      return databaseError("Impossible de récupérer les réponses LLM.");
     }
 
     const llmResponses = (responses ?? []) as LlmResponseRow[];
@@ -73,7 +73,7 @@ export async function GET(
       .eq("is_active", true);
 
     if (promptsError) {
-      throw databaseError("Impossible de récupérer les prompts.");
+      return databaseError("Impossible de récupérer les prompts.");
     }
 
     const promptRows = (prompts ?? []) as PromptRow[];

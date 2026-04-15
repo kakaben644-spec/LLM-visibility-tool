@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
       }>();
 
     if (sessionError || !sessionData) {
-      throw notFound(
+      return notFound(
         "Session introuvable ou expirée. Merci de recommencer l'onboarding."
       );
     }
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
 
     if (brandError || !brandData) {
       console.error("[POST /api/generate-prompts] Brand insert error:", brandError);
-      throw databaseError("Impossible de créer la marque.");
+      return databaseError("Impossible de créer la marque.");
     }
 
     const brandId = brandData.id;
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
 
     if (insertError) {
       console.error("[POST /api/generate-prompts] Supabase insert error:", insertError);
-      throw databaseError("Impossible d'enregistrer les prompts générés.");
+      return databaseError("Impossible d'enregistrer les prompts générés.");
     }
 
     return successResponse({ prompts });
