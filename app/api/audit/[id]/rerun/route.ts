@@ -19,6 +19,8 @@ const bodySchema = z.object({
   session_token: z.string().uuid("session_token doit être un UUID valide"),
 });
 
+const idSchema = z.string().uuid("L'identifiant de l'audit doit être un UUID valide");
+
 // ---------------------------------------------------------------------------
 // Types locaux
 // ---------------------------------------------------------------------------
@@ -28,10 +30,18 @@ interface AuditRow {
   brand_id: string;
 }
 
+interface BrandRow {
+  name: string;
+}
+
 interface PromptRow {
   id: string;
   text: string;
   category: string | null;
+}
+
+interface CompetitorRow {
+  name: string;
 }
 
 interface NewAuditRow {
@@ -47,7 +57,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: auditId } = await params;
+    const { id: rawId } = await params;
+    const auditId = idSchema.parse(rawId);
 
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {
@@ -68,7 +79,18 @@ export async function POST(
       throw notFound("Audit introuvable.");
     }
 
-    // b) Récupérer les prompts actifs liés au brand_id
+    // b) Récupérer le nom de la marque
+    const { data: brand, error: brandError } = await supabase
+      .from("brands")
+      .select("name")
+      .eq("id", audit.brand_id)
+      .single<BrandRow>();
+
+    if (brandError || !brand) {
+      throw databaseError("Impossible de récupérer la marque.");
+    }
+
+    // c) Récupérer les prompts actifs liés au brand_id
     const { data: prompts, error: promptsError } = await supabase
       .from("prompts")
       .select("id, text, category")
@@ -81,7 +103,19 @@ export async function POST(
 
     const promptRows = (prompts ?? []) as PromptRow[];
 
-    // c) INSERT nouvel audit
+    // d) Récupérer les concurrents liés au brand_id
+    const { data: competitors, error: competitorsError } = await supabase
+      .from("competitors")
+      .select("name")
+      .eq("brand_id", audit.brand_id);
+
+    if (competitorsError) {
+      throw databaseError("Impossible de récupérer les concurrents.");
+    }
+
+    const competitorRows = (competitors ?? []) as CompetitorRow[];
+
+    // e) INSERT nouvel audit
     const { data: newAudit, error: newAuditError } = await supabase
       .from("audits")
       .insert({
@@ -100,11 +134,9 @@ export async function POST(
     return successResponse(
       {
         audit_id: newAudit.id,
-        prompts: promptRows.map((p) => ({
-          id: p.id,
-          text: p.text,
-          category: p.category,
-        })),
+        brand_name: brand.name,
+        prompts: promptRows.map((p) => p.text),
+        competitors: competitorRows.map((c) => c.name),
       },
       201
     );
