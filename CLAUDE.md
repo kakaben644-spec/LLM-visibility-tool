@@ -84,6 +84,7 @@ Ne réécris pas le fichier entier — ajoute uniquement ce bloc à la fin.
 ✅  US-02 — Génération prompts IA (Step 2) 
 ✅  US-03 — Sélection prompts (Step 2 suite)
 ✅  US-04 — Détection concurrents (Step 3)
+✅  US-18 — Relancer un audit
 
 
 ### Règles de travail
@@ -106,3 +107,8 @@ Ne réécris pas le fichier entier — ajoute uniquement ce bloc à la fin.
 ### Langue
 - Tous les prompts Claude Code sont rédigés en anglais
 - Les chaînes UI dans le code restent en français
+
+## Points techniques importants
+- `app/(dashboard)/dashboard/page.tsx` — dashboard page (attention : pas `app/(dashboard)/page.tsx`)
+- Route `POST /api/audit/[id]/rerun` — rerun existant, complété en 18A : retourne `{ audit_id, brand_name, prompts[], competitors[] }`, triggered_by = 'manual'
+- Modale shadcn/ui Dialog pour confirmation avant relancement d'audit
