@@ -13,7 +13,7 @@ import {
   API_ERROR_CODES,
 } from "@/lib/utils/api-error";
 
-export const maxDuration = 8;
+export const maxDuration = 10;
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
