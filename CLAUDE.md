@@ -107,3 +107,10 @@ Ne réécris pas le fichier entier — ajoute uniquement ce bloc à la fin.
 ### Langue
 - Tous les prompts Claude Code sont rédigés en anglais
 - Les chaînes UI dans le code restent en français
+
+## Points techniques importants (bugs résolus)
+- `lib/utils/rate-limit.ts` — helper réutilisable Upstash rate limiting (checkRateLimit), fail open si Redis down
+- `lib/utils/api-error.ts` — errorResponse() a deux surcharges : forme catch-block (error: unknown) et forme directe (string, code, status, details?)
+- Rate limiting appliqué sur 6 routes par IP avec sliding window 1h : audit/start (3), audit/run-llm (5), generate-prompts (10), detect-competitors (10), scrape (10), audit/[id]/rerun (3)
+- Headers de sécurité configurés dans next.config.ts : X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, CSP
+- Variables Upstash : UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN
