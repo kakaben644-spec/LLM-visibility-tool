@@ -81,9 +81,36 @@ Ne réécris pas le fichier entier — ajoute uniquement ce bloc à la fin.
 ✅ US-16 — Persistance onboarding (route session POST/PATCH/GET, lib/session.ts)
 ✅ US-23 — Architecture async LLM (routes audit/start, run-llm, status, rerun + lib/llm/*)
 ✅ US-01 — Saisie marque (Step 1 onboarding)
-✅  US-02 — Génération prompts IA (Step 2) 
-✅  US-03 — Sélection prompts (Step 2 suite)
-✅  US-04 — Détection concurrents (Step 3)
+✅ US-02 — Génération prompts IA (Step 2)
+✅ US-03 — Sélection prompts (Step 2 suite)
+✅ US-04 — Détection concurrents (Step 3)
+✅ US-08 — Scanning page + dashboard (ScoreCard, ResponseAccordion, routes score/responses)
+✅ US-19 — Erreurs et toasts (not-found, error, EmptyState, toasts partiels, scanning complète)
+
+### Statut global Sprint 2
+🔄 US-21 — (prochaine à développer)
+
+### Pages implémentées
+- `app/(marketing)/page.tsx` ✅ landing
+- `app/(onboarding)/step-1/page.tsx` ✅ (US-01)
+- `app/(onboarding)/step-2/page.tsx` ✅ (US-02 + US-03)
+- `app/(onboarding)/step-3/page.tsx` ✅ (US-04)
+- `app/(onboarding)/scanning/page.tsx` ✅ complète (US-08 + US-19D) — polling 2s, bouton Réessayer sur status failed, rerun POST
+- `app/(dashboard)/dashboard/page.tsx` ✅ (US-08 + US-19C)
+- `app/not-found.tsx` ✅ (US-19B)
+- `app/error.tsx` ✅ (US-19B)
+
+### Composants dashboard
+- `components/features/dashboard/ScoreCard.tsx` ✅ (US-08)
+- `components/features/dashboard/ResponseAccordion.tsx` ✅ (US-08)
+- `components/features/dashboard/HighlightedText.tsx` ✅ (US-08)
+- `components/features/dashboard/EmptyState.tsx` ✅ (US-19C) — affiché si brand_score === 0
+
+### Points techniques importants
+- Toaster global branché dans `app/layout.tsx` — `useToast()` disponible partout
+- Page scanning implémentée avec polling toutes les 2s et bouton Réessayer sur status failed
+- EmptyState affiché dans le dashboard si `brand_score === 0`
+- Toast destructive déclenché pour chaque LLM dans `failed_llms`
 
 
 ### Règles de travail

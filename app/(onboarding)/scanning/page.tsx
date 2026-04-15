@@ -6,10 +6,9 @@ import { useRouter } from "next/navigation";
 import {
   getSessionToken,
   getBrandName,
+  getCurrentAuditId,
   setCurrentAuditId,
 } from "@/lib/session";
-
-// getBrandName is called only inside useEffect (run()), never in the render body.
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -67,6 +66,14 @@ interface StatusSuccess {
   };
 }
 
+interface RerunSuccess {
+  ok: true;
+  data: {
+    audit_id: string;
+    prompts: StartAuditPrompt[];
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Page state machine
 // ---------------------------------------------------------------------------
@@ -85,11 +92,15 @@ type PageState =
       phase: "polling";
       auditId: string;
       progressPct: number;
+      completedLlms: string[];
       totalResponses: number;
       expectedResponses: number;
       brandName: string;
     }
-  | { phase: "error"; message: string; canRetry: boolean }
+  // "failed" = audit status is failed — has auditId so rerun is possible
+  | { phase: "failed"; auditId: string; brandName: string }
+  // "error" = unrecoverable setup error (e.g. start failed)
+  | { phase: "error"; message: string }
   | { phase: "done" };
 
 // ---------------------------------------------------------------------------
@@ -99,77 +110,41 @@ type PageState =
 export default function ScanningPage() {
   const router = useRouter();
   const [state, setState] = useState<PageState>({ phase: "init" });
-  // Prevent double-start in strict mode
+  const [rerunning, setRerunning] = useState(false);
+
+  // Prevent double-start in React strict mode
   const started = useRef(false);
+  // Signal abort to async loops on unmount
+  const abortRef = useRef(false);
 
   useEffect(() => {
+    abortRef.current = false;
     if (started.current) return;
     started.current = true;
     void run();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      abortRef.current = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function run() {
-    // ── Read localStorage ──────────────────────────────────────────────────
-    const sessionToken = getSessionToken();
-    const brandName = getBrandName() ?? "";
+  // ── Shared: run LLM calls then poll status ───────────────────────────────
 
-    if (!sessionToken) {
-      router.replace("/step-1");
-      return;
-    }
-
-    // ── Step 1: Start audit ────────────────────────────────────────────────
-    setState({ phase: "starting", brandName });
-
-    let auditId: string;
-    let prompts: StartAuditPrompt[];
-
-    try {
-      const startRes = await fetch("/api/audit/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_token: sessionToken }),
-      });
-
-      const startData = await startRes.json()
-      const startJson = startData as StartAuditSuccess | ApiFailure;
-
-      if (!startJson.ok) {
-        setState({
-          phase: "error",
-          message: "Impossible de démarrer l'audit",
-          canRetry: false,
-        });
-        return;
-      }
-
-      auditId = startJson.data.audit_id;
-      prompts = startJson.data.prompts;
-      setCurrentAuditId(auditId);
-    } catch {
-      setState({
-        phase: "error",
-        message: "Impossible de démarrer l'audit",
-        canRetry: false,
-      });
-      return;
-    }
-
-    // ── Step 2: Run LLM calls sequentially ────────────────────────────────
+  async function orchestrateLlmCalls(
+    auditId: string,
+    prompts: StartAuditPrompt[],
+    brandName: string
+  ): Promise<void> {
     const totalCalls = prompts.length * LLM_NAMES.length;
     let completedCalls = 0;
 
-    setState({
-      phase: "running",
-      auditId,
-      completedCalls,
-      totalCalls,
-      brandName,
-    });
+    setState({ phase: "running", auditId, completedCalls, totalCalls, brandName });
 
     for (const prompt of prompts) {
       for (const llmName of LLM_NAMES) {
+        if (abortRef.current) return;
+
         try {
           const body: {
             audit_id: string;
@@ -193,29 +168,25 @@ export default function ScanningPage() {
             body: JSON.stringify(body),
           });
 
-          // Parse but intentionally ignore per-call failures — continue
           const json = (await res.json()) as RunLlmSuccess | ApiFailure;
-          void json; // result not needed for progress
-        } catch {
-          // Swallow individual call errors, keep going
+          void json;
+        } catch (err) {
+          console.error("[run-llm] appel échoué:", err);
+          // Swallow individual call errors — keep going
         }
 
         completedCalls += 1;
-        setState({
-          phase: "running",
-          auditId,
-          completedCalls,
-          totalCalls,
-          brandName,
-        });
+        setState({ phase: "running", auditId, completedCalls, totalCalls, brandName });
       }
     }
 
-    // ── Step 3: Poll status ────────────────────────────────────────────────
+    if (abortRef.current) return;
+
     setState({
       phase: "polling",
       auditId,
       progressPct: 100,
+      completedLlms: [],
       totalResponses: completedCalls,
       expectedResponses: totalCalls,
       brandName,
@@ -224,36 +195,82 @@ export default function ScanningPage() {
     await pollStatus(auditId, brandName);
   }
 
-  async function pollStatus(auditId: string, brandName: string) {
+  // ── Initial flow: start audit then orchestrate ───────────────────────────
+
+  async function run(): Promise<void> {
+    const sessionToken = getSessionToken();
+    const brandName = getBrandName() ?? "";
+
+    if (!sessionToken) {
+      router.replace("/");
+      return;
+    }
+
+    setState({ phase: "starting", brandName });
+
+    let auditId: string;
+    let prompts: StartAuditPrompt[];
+
+    try {
+      const startRes = await fetch("/api/audit/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_token: sessionToken }),
+      });
+
+      const startData = await startRes.json();
+      const startJson = startData as StartAuditSuccess | ApiFailure;
+
+      if (!startJson.ok) {
+        console.error("[audit/start] erreur API:", startJson.error);
+        setState({ phase: "error", message: "Impossible de démarrer l'analyse." });
+        return;
+      }
+
+      auditId = startJson.data.audit_id;
+      prompts = startJson.data.prompts;
+      setCurrentAuditId(auditId);
+    } catch (err) {
+      console.error("[audit/start] erreur réseau:", err);
+      setState({ phase: "error", message: "Impossible de démarrer l'analyse." });
+      return;
+    }
+
+    await orchestrateLlmCalls(auditId, prompts, brandName);
+  }
+
+  // ── Poll status until completed / failed ─────────────────────────────────
+
+  async function pollStatus(auditId: string, brandName: string): Promise<void> {
+    const sessionToken = getSessionToken();
+    const qs = sessionToken
+      ? `?session_token=${encodeURIComponent(sessionToken)}`
+      : "";
+
     const poll = async (): Promise<void> => {
+      if (abortRef.current) return;
+
       try {
-        const res = await fetch(`/api/audit/${auditId}/status`);
+        const res = await fetch(`/api/audit/${auditId}/status${qs}`);
         const json = (await res.json()) as StatusSuccess | ApiFailure;
 
         if (!json.ok) {
-          setState({
-            phase: "error",
-            message: "L'audit a échoué. Veuillez réessayer.",
-            canRetry: true,
-          });
+          console.error("[audit/status] erreur API:", json.error);
+          setState({ phase: "failed", auditId, brandName });
           return;
         }
 
-        const { status, progress_pct, total_responses, expected_responses } =
+        const { status, progress_pct, completed_llms, total_responses, expected_responses } =
           json.data;
 
         if (status === "completed") {
           setState({ phase: "done" });
-          router.replace("/dashboard");
+          router.replace("/dashboard/dashboard");
           return;
         }
 
         if (status === "failed") {
-          setState({
-            phase: "error",
-            message: "L'audit a échoué. Veuillez réessayer.",
-            canRetry: true,
-          });
+          setState({ phase: "failed", auditId, brandName });
           return;
         }
 
@@ -261,28 +278,65 @@ export default function ScanningPage() {
           phase: "polling",
           auditId,
           progressPct: progress_pct,
+          completedLlms: completed_llms,
           totalResponses: total_responses,
           expectedResponses: expected_responses,
           brandName,
         });
 
-        await new Promise<void>((resolve) =>
-          setTimeout(resolve, POLL_INTERVAL_MS)
-        );
+        await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
         await poll();
-      } catch {
-        setState({
-          phase: "error",
-          message: "L'audit a échoué. Veuillez réessayer.",
-          canRetry: true,
-        });
+      } catch (err) {
+        console.error("[audit/status] erreur réseau:", err);
+        setState({ phase: "failed", auditId, brandName });
       }
     };
 
     await poll();
   }
 
-  // ── Derived display values ───────────────────────────────────────────────
+  // ── Rerun: POST /api/audit/[id]/rerun then orchestrate ───────────────────
+
+  async function handleRerun(): Promise<void> {
+    if (state.phase !== "failed") return;
+
+    const sessionToken = getSessionToken();
+    if (!sessionToken) {
+      router.replace("/");
+      return;
+    }
+
+    const { auditId, brandName } = state;
+    setRerunning(true);
+
+    try {
+      const res = await fetch(`/api/audit/${auditId}/rerun`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_token: sessionToken }),
+      });
+
+      const json = (await res.json()) as RerunSuccess | ApiFailure;
+
+      if (!json.ok) {
+        console.error("[audit/rerun] erreur API:", json.error);
+        setRerunning(false);
+        return;
+      }
+
+      const { audit_id: newAuditId, prompts } = json.data;
+      setCurrentAuditId(newAuditId);
+      setRerunning(false);
+
+      setState({ phase: "starting", brandName });
+      await orchestrateLlmCalls(newAuditId, prompts, brandName);
+    } catch (err) {
+      console.error("[audit/rerun] erreur réseau:", err);
+      setRerunning(false);
+    }
+  }
+
+  // ── Derived display values ────────────────────────────────────────────────
 
   const progressPct: number = (() => {
     if (state.phase === "running") {
@@ -297,24 +351,72 @@ export default function ScanningPage() {
 
   const progressLabel: string = (() => {
     if (state.phase === "running") {
-      return `Analyse en cours... ${state.completedCalls} / ${state.totalCalls} réponses`;
+      return `${state.completedCalls} / ${state.totalCalls} réponses reçues`;
     }
     if (state.phase === "polling") {
-      return `Analyse en cours... ${state.totalResponses} / ${state.expectedResponses} réponses`;
+      return `${state.totalResponses} / ${state.expectedResponses} réponses reçues`;
     }
-    if (state.phase === "starting") return "Démarrage de l'audit...";
+    if (state.phase === "starting") return "Démarrage de l'analyse…";
     if (state.phase === "done") return "Terminé !";
-    return "";
+    return "Analyse en cours, veuillez patienter…";
   })();
 
-  const brandName: string =
+  const completedLlms: string[] =
+    state.phase === "polling" ? state.completedLlms : [];
+
+  const displayBrandName: string =
     state.phase === "running" ||
     state.phase === "polling" ||
-    state.phase === "starting"
+    state.phase === "starting" ||
+    state.phase === "failed"
       ? state.brandName
       : "";
 
-  // ── Error state ──────────────────────────────────────────────────────────
+  // ── Failed state (retriable via rerun) ───────────────────────────────────
+
+  if (state.phase === "failed") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-6 px-6">
+        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 8v4M12 16h.01"
+              stroke="#EF4444"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <circle cx="12" cy="12" r="10" stroke="#EF4444" strokeWidth="1.5" />
+          </svg>
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-base font-medium text-[#141420] font-[family-name:var(--font-sora)]">
+            L&apos;analyse a échoué
+          </p>
+          <p className="text-sm text-[#707085] font-[family-name:var(--font-dm-sans)]">
+            Une erreur est survenue pendant l&apos;analyse.
+          </p>
+        </div>
+        <button
+          onClick={() => void handleRerun()}
+          disabled={rerunning}
+          className="px-6 py-2.5 bg-[#6B54FA] hover:bg-[#5A43E8] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors font-[family-name:var(--font-dm-sans)] flex items-center gap-2"
+        >
+          {rerunning && (
+            <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+          )}
+          Réessayer
+        </button>
+        <a
+          href="/"
+          className="text-sm text-[#707085] underline underline-offset-2 hover:text-[#141420] transition-colors font-[family-name:var(--font-dm-sans)]"
+        >
+          Recommencer depuis le début
+        </a>
+      </div>
+    );
+  }
+
+  // ── Error state (non-retriable — e.g. audit start failed) ─────────────────
 
   if (state.phase === "error") {
     return (
@@ -333,41 +435,29 @@ export default function ScanningPage() {
         <p className="text-base font-medium text-[#141420] text-center font-[family-name:var(--font-sora)]">
           {state.message}
         </p>
-        {state.canRetry ? (
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-2.5 bg-[#6B54FA] hover:bg-[#5A43E8] text-white text-sm font-semibold rounded-xl transition-colors font-[family-name:var(--font-dm-sans)]"
-          >
-            Réessayer
-          </button>
-        ) : (
-          <button
-            onClick={() => router.push("/step-3")}
-            className="px-6 py-2.5 border border-[#E0E0EB] text-[#141420] text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors font-[family-name:var(--font-dm-sans)]"
-          >
-            Retour
-          </button>
-        )}
+        <a
+          href="/"
+          className="px-6 py-2.5 border border-[#E0E0EB] text-[#141420] text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors font-[family-name:var(--font-dm-sans)]"
+        >
+          Recommencer depuis le début
+        </a>
       </div>
     );
   }
 
-  // ── Normal / loading state ───────────────────────────────────────────────
+  // ── Loading / progress state ──────────────────────────────────────────────
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6">
       <div className="w-full max-w-md flex flex-col items-center gap-8">
-        {/* Brand name heading */}
-        {brandName && (
+        {displayBrandName && (
           <h1 className="text-xl font-bold text-[#141420] text-center font-[family-name:var(--font-sora)]">
-            Analyse de {brandName}
+            Analyse de {displayBrandName}
           </h1>
         )}
 
-        {/* Animated spinner */}
         <div className="w-14 h-14 rounded-full border-[3px] border-[#E0E0EB] border-t-[#6B54FA] animate-spin" />
 
-        {/* Progress bar */}
         <div className="w-full">
           <div className="h-2 w-full rounded-full bg-[#E0E0EB] overflow-hidden">
             <div
@@ -379,6 +469,25 @@ export default function ScanningPage() {
             {progressLabel}
           </p>
         </div>
+
+        {completedLlms.length > 0 && (
+          <div className="w-full space-y-1">
+            <p className="text-xs text-[#707085] uppercase tracking-wide font-[family-name:var(--font-dm-sans)]">
+              Modèles complétés
+            </p>
+            <ul className="space-y-1">
+              {completedLlms.map((llm) => (
+                <li
+                  key={llm}
+                  className="flex items-center gap-2 text-sm text-[#141420] font-[family-name:var(--font-dm-sans)]"
+                >
+                  <span className="text-green-500">✓</span>
+                  {llm}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
