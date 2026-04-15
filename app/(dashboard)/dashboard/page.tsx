@@ -1,264 +1,154 @@
 "use client";
 
-// ---------------------------------------------------------------------------
-// NOTE : les composants components/features/dashboard/ScoreCard.tsx et
-// ResponseAccordion.tsx n'existent pas encore.
-// Les routes GET /api/audit/[id]/score et /api/audit/[id]/responses n'existent
-// pas non plus. Cette page appelle les bons endpoints et affiche les données
-// en ligne — à refactoriser quand les composants seront créés.
-// ---------------------------------------------------------------------------
-
 import { useEffect, useState } from "react";
-import { getCurrentAuditId, getSessionToken } from "@/lib/session";
-import { LLM_LABELS } from "@/lib/types";
-import type { LlmProvider } from "@/lib/types";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { useRouter } from "next/navigation";
+
+import type { AuditScoreApiData, LlmResponse } from "@/lib/types";
+import { ScoreCard } from "@/components/features/dashboard/ScoreCard";
+import { ResponseAccordion } from "@/components/features/dashboard/ResponseAccordion";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // ---------------------------------------------------------------------------
-// Types des réponses API
+// Local interfaces
 // ---------------------------------------------------------------------------
 
-interface RankingEntry {
-  provider: LlmProvider;
-  score: number;
-}
-
-interface ScoreApiData {
-  brand_name: string;
-  brand_score: number;
-  ranking: RankingEntry[];
-}
-
-interface LlmResponseItem {
-  id: string;
-  provider: LlmProvider;
-  prompt: string;
-  response: string;
-  is_mentioned: boolean;
-  is_recommended: boolean;
-  sentiment: "positive" | "neutral" | "negative" | null;
-  score: number;
-}
-
-interface ResponsesApiData {
-  responses: LlmResponseItem[];
-}
-
-// Enveloppe de succès renvoyée par successResponse()
-interface ApiWrapper<T> {
+interface ScoreApiResponse {
   ok: true;
-  data: T;
+  data: AuditScoreApiData;
+}
+
+interface ResponsesApiResponse {
+  ok: true;
+  data: {
+    responses: LlmResponse[];
+  };
+}
+
+// Shape stored in localStorage under "llmv_session"
+interface SessionCache {
+  brand_name?: string;
+  competitors?: string[];
 }
 
 // ---------------------------------------------------------------------------
-// Composant principal
+// Dashboard Page
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
-  const [scoreData, setScoreData] = useState<ScoreApiData | null>(null);
-  const [responsesData, setResponsesData] = useState<ResponsesApiData | null>(
-    null
-  );
+  const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scoreData, setScoreData] = useState<AuditScoreApiData | null>(null);
+  const [responses, setResponses] = useState<LlmResponse[]>([]);
+  const [competitors, setCompetitors] = useState<string[]>([]);
 
   useEffect(() => {
-    const auditId = getCurrentAuditId();
-    const sessionToken = getSessionToken();
+    const auditId = localStorage.getItem("llmv_current_audit");
 
-    if (!auditId || !sessionToken) {
-      setError("Session introuvable. Veuillez relancer l'analyse.");
-      setLoading(false);
+    if (!auditId) {
+      router.replace("/step-1");
       return;
     }
 
-    const qs = `session_token=${encodeURIComponent(sessionToken)}`;
+    // Read competitors from the cached session if available
+    try {
+      const raw = localStorage.getItem("llmv_session");
+      if (raw) {
+        const session = JSON.parse(raw) as SessionCache;
+        setCompetitors(session.competitors ?? []);
+      }
+    } catch {
+      // ignore parse errors — competitors will be empty
+    }
 
-    Promise.all([
-      fetch(`/api/audit/${auditId}/score?${qs}`).then(async (res) => {
-        if (!res.ok) throw new Error(`score: ${res.status}`);
-        const json = (await res.json()) as ApiWrapper<ScoreApiData>;
-        return json.data;
-      }),
-      fetch(`/api/audit/${auditId}/responses?${qs}`).then(async (res) => {
-        if (!res.ok) throw new Error(`responses: ${res.status}`);
-        const json = (await res.json()) as ApiWrapper<ResponsesApiData>;
-        return json.data;
-      }),
-    ])
-      .then(([score, responses]) => {
-        setScoreData(score);
-        setResponsesData(responses);
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(`Erreur lors du chargement des données : ${msg}`);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    async function load() {
+      try {
+        const [scoreRes, responsesRes] = await Promise.all([
+          fetch(`/api/audit/${auditId}/score`),
+          fetch(`/api/audit/${auditId}/responses`),
+        ]);
 
-  // ── États de chargement / erreur ──────────────────────────────────────────
+        if (!scoreRes.ok || !responsesRes.ok) {
+          throw new Error("Impossible de charger les résultats");
+        }
+
+        const scoreJson = (await scoreRes.json()) as ScoreApiResponse;
+        const responsesJson =
+          (await responsesRes.json()) as ResponsesApiResponse;
+
+        setScoreData(scoreJson.data);
+        setResponses(responsesJson.data.responses);
+
+        // Prefer competitors from the score API ranking if present
+        const competitorNames = scoreJson.data.ranking
+          .filter((e) => e.entity_type === "competitor")
+          .map((e) => e.entity_name);
+        if (competitorNames.length > 0) {
+          setCompetitors(competitorNames);
+        }
+      } catch {
+        setError("Impossible de charger les résultats");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [router]);
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground text-sm animate-pulse">
-          Chargement du tableau de bord…
-        </p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-current border-t-transparent" />
       </div>
     );
   }
 
-  if (error || !scoreData || !responsesData) {
+  if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-8">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <CardTitle className="text-destructive">
-              Impossible de charger les résultats
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {error ?? "Une erreur inattendue est survenue."}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-destructive">{error}</p>
       </div>
     );
   }
 
-  // ── Rendu principal ───────────────────────────────────────────────────────
-
-  const sentimentLabel: Record<
-    NonNullable<LlmResponseItem["sentiment"]>,
-    string
-  > = {
-    positive: "Positif",
-    neutral: "Neutre",
-    negative: "Négatif",
-  };
-
-  const sentimentVariant: Record<
-    NonNullable<LlmResponseItem["sentiment"]>,
-    "default" | "secondary" | "destructive"
-  > = {
-    positive: "default",
-    neutral: "secondary",
-    negative: "destructive",
-  };
+  const brandName = scoreData?.brand_name ?? "";
 
   return (
-    <main className="min-h-screen bg-background p-6 md:p-10">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* ── En-tête ── */}
-        <div>
-          <h1 className="text-2xl font-bold">
-            Visibilité IA — {scoreData.brand_name}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Résultats de l&apos;audit LLM
-          </p>
-        </div>
+    <main className="container mx-auto py-8 space-y-8">
+      {scoreData && (
+        <ScoreCard
+          brandName={brandName}
+          brandScore={scoreData.brand_score}
+          ranking={scoreData.ranking}
+        />
+      )}
 
-        {/* ── ScoreCard ── */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Score global</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-              <span className="text-5xl font-extrabold tabular-nums">
-                {scoreData.brand_score}
-              </span>
-              <span className="text-muted-foreground text-lg">/&nbsp;100</span>
-            </div>
+      <div className="rounded-lg border p-6">
+        <p className="text-muted-foreground">Benchmark ici</p>
+      </div>
 
-            {scoreData.ranking.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Par modèle</p>
-                <ul className="space-y-1">
-                  {scoreData.ranking.map((entry) => (
-                    <li
-                      key={entry.provider}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="text-muted-foreground">
-                        {LLM_LABELS[entry.provider]}
-                      </span>
-                      <span className="font-semibold tabular-nums">
-                        {entry.score}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Détail des réponses LLM
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponseAccordion
+            responses={responses}
+            brandName={brandName}
+            competitors={competitors}
+          />
+        </CardContent>
+      </Card>
 
-        {/* ── ResponseAccordion ── */}
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Réponses des LLMs
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({responsesData.responses.length} résultat
-                {responsesData.responses.length !== 1 ? "s" : ""})
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {responsesData.responses.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                Aucune réponse disponible pour cet audit.
-              </p>
-            ) : (
-              <Accordion type="multiple" className="w-full">
-                {responsesData.responses.map((item) => (
-                  <AccordionItem key={item.id} value={item.id}>
-                    <AccordionTrigger className="text-left text-sm">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="secondary">
-                          {LLM_LABELS[item.provider]}
-                        </Badge>
-                        {item.is_mentioned && (
-                          <Badge variant="default">Mentionné</Badge>
-                        )}
-                        {item.is_recommended && (
-                          <Badge variant="default">Recommandé</Badge>
-                        )}
-                        {item.sentiment && (
-                          <Badge variant={sentimentVariant[item.sentiment]}>
-                            {sentimentLabel[item.sentiment]}
-                          </Badge>
-                        )}
-                        <span className="truncate max-w-sm text-muted-foreground">
-                          {item.prompt}
-                        </span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="text-sm whitespace-pre-wrap text-muted-foreground">
-                      {item.response}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            )}
-          </CardContent>
-        </Card>
+      <div className="flex justify-center pb-4">
+        <Button asChild variant="default" size="lg">
+          <a href="#">Voir les recommandations</a>
+        </Button>
       </div>
     </main>
   );

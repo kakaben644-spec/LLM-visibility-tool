@@ -141,6 +141,7 @@ export default function Step2Page() {
             session_token: sessionToken,
             current_step: 2,
             generated_prompts: prompts,
+            selected_prompts: prompts,
           }),
         });
 
