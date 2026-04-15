@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import type { AuditScoreApiData, LlmResponse } from "@/lib/types";
 import { ScoreCard } from "@/components/features/dashboard/ScoreCard";
 import { ResponseAccordion } from "@/components/features/dashboard/ResponseAccordion";
+import { EmptyState } from "@/components/features/dashboard/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 
 // ---------------------------------------------------------------------------
 // Local interfaces
@@ -25,6 +27,19 @@ interface ResponsesApiResponse {
   };
 }
 
+interface StatusApiResponse {
+  ok: true;
+  data: {
+    audit_id: string;
+    status: string;
+    progress_pct: number;
+    completed_llms: string[];
+    failed_llms: string[];
+    total_responses: number;
+    expected_responses: number;
+  };
+}
+
 // Shape stored in localStorage under "llmv_session"
 interface SessionCache {
   brand_name?: string;
@@ -37,6 +52,7 @@ interface SessionCache {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +104,28 @@ export default function DashboardPage() {
         if (competitorNames.length > 0) {
           setCompetitors(competitorNames);
         }
+
+        // Fire status check after main fetches — toast on partial failures
+        const sessionToken = localStorage.getItem("llmv_session");
+        const statusQs = sessionToken
+          ? `?session_token=${encodeURIComponent(sessionToken)}`
+          : "";
+        try {
+          const statusRes = await fetch(
+            `/api/audit/${auditId}/status${statusQs}`
+          );
+          if (statusRes.ok) {
+            const statusJson = (await statusRes.json()) as StatusApiResponse;
+            for (const llmName of statusJson.data.failed_llms) {
+              toast({
+                title: `${llmName} indisponible — résultats partiels`,
+                variant: "destructive",
+              });
+            }
+          }
+        } catch {
+          // Status check failure is non-blocking — ignore silently
+        }
       } catch {
         setError("Impossible de charger les résultats");
       } finally {
@@ -118,13 +156,16 @@ export default function DashboardPage() {
 
   return (
     <main className="container mx-auto py-8 space-y-8">
-      {scoreData && (
-        <ScoreCard
-          brandName={brandName}
-          brandScore={scoreData.brand_score}
-          ranking={scoreData.ranking}
-        />
-      )}
+      {scoreData &&
+        (scoreData.brand_score === 0 ? (
+          <EmptyState />
+        ) : (
+          <ScoreCard
+            brandName={brandName}
+            brandScore={scoreData.brand_score}
+            ranking={scoreData.ranking}
+          />
+        ))}
 
       <div className="rounded-lg border p-6">
         <p className="text-muted-foreground">Benchmark ici</p>
