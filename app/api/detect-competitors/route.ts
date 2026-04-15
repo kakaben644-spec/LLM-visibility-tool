@@ -12,6 +12,7 @@ import {
   AppError,
   API_ERROR_CODES,
 } from "@/lib/utils/api-error";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 export const maxDuration = 8;
 
@@ -93,6 +94,9 @@ async function callClaudeForCompetitors(
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(req, "detect-competitors", 10, 3600);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {

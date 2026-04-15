@@ -8,6 +8,7 @@ import {
   notFound,
   databaseError,
 } from "@/lib/utils/api-error";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 export const maxDuration = 8;
 
@@ -46,6 +47,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const rateLimitResponse = await checkRateLimit(req, "audit:rerun", 3, 3600);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { id: auditId } = await params;
 

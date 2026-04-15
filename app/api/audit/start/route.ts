@@ -10,6 +10,7 @@ import {
   AppError,
   API_ERROR_CODES,
 } from "@/lib/utils/api-error";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 export const maxDuration = 8;
 
@@ -67,6 +68,9 @@ interface AuditRow {
 // ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(req, "audit:start", 3, 3600);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {
