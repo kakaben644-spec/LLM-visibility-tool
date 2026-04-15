@@ -84,6 +84,7 @@ Ne réécris pas le fichier entier — ajoute uniquement ce bloc à la fin.
 ✅  US-02 — Génération prompts IA (Step 2) 
 ✅  US-03 — Sélection prompts (Step 2 suite)
 ✅  US-04 — Détection concurrents (Step 3)
+✅  US-21 — Sécurité API / rate limiting
 
 
 ### Règles de travail
