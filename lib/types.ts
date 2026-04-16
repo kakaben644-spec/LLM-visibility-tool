@@ -210,6 +210,10 @@ export interface ExportOptions {
   include_details: boolean;
 }
 
+// ─── LLM Names ────────────────────────────────────────────────────────────────
+
+export type LlmName = "claude" | "openai" | "gemini" | "mistral";
+
 // ─── LLM Call Result ──────────────────────────────────────────────────────────
 
 export interface LLMCallResult {

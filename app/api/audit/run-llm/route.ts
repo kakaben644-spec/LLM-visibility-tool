@@ -11,6 +11,7 @@ import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { callOpenAI } from "@/lib/llm/openai";
 import { callClaude } from "@/lib/llm/claude";
 import { callGemini } from "@/lib/llm/gemini";
+import { callMistral } from "@/lib/llm/mistral";
 import { detectMentions } from "@/lib/utils/mentions";
 import type { LLMCallResult } from "@/lib/types";
 
@@ -24,7 +25,7 @@ const bodySchema = z.object({
   audit_id: z.string().uuid("audit_id doit être un UUID valide"),
   prompt_id: z.string().uuid("prompt_id doit être un UUID valide"),
   prompt_text: z.string().min(1),
-  llm_name: z.enum(["gpt-4o", "claude-sonnet", "gemini-pro"]),
+  llm_name: z.enum(["gpt-4o", "claude-sonnet", "gemini-pro", "mistral-small"]),
   brand_name: z.string().min(1),
   competitors: z.array(
     z.object({
@@ -69,6 +70,9 @@ export async function POST(req: NextRequest) {
         break;
       case "gemini-pro":
         llmResult = await callGemini(input.prompt_text);
+        break;
+      case "mistral-small":
+        llmResult = await callMistral(input.prompt_text);
         break;
     }
 
