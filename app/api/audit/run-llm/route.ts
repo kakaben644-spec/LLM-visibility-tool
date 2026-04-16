@@ -7,6 +7,7 @@ import {
   successResponse,
   databaseError,
 } from "@/lib/utils/api-error";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { callOpenAI } from "@/lib/llm/openai";
 import { callClaude } from "@/lib/llm/claude";
 import { callGemini } from "@/lib/llm/gemini";
@@ -46,10 +47,13 @@ interface LlmResponseRow {
 // ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(req, "audit:run-llm", 5, 3600);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {
-      throw new Error("Corps de la requête manquant");
+      return errorResponse("Corps de la requête manquant", "VALIDATION_ERROR", 400);
     }
 
     const input = bodySchema.parse(body);
@@ -87,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     if (llmResponseError || !llmResponse) {
       console.error("[audit/run-llm] llm_response insert error:", llmResponseError);
-      throw databaseError("Impossible d'enregistrer la réponse LLM.");
+      return databaseError("Impossible d'enregistrer la réponse LLM.");
     }
 
     // c) Analyser les mentions (brand + concurrents)

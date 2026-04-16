@@ -12,6 +12,7 @@ import {
   AppError,
   API_ERROR_CODES,
 } from "@/lib/utils/api-error";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 export const maxDuration = 10;
 
@@ -93,6 +94,9 @@ async function callClaudeForCompetitors(
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(req, "detect-competitors", 10, 3600);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {
@@ -120,7 +124,7 @@ export async function POST(req: NextRequest) {
       }>();
 
     if (sessionError || !session) {
-      throw notFound(
+      return notFound(
         "Session introuvable ou expirée. Merci de recommencer l'onboarding."
       );
     }
@@ -139,7 +143,7 @@ export async function POST(req: NextRequest) {
 
     if (updateError) {
       console.error("[POST /api/detect-competitors] Supabase update error:", updateError);
-      throw databaseError("Impossible d'enregistrer les concurrents détectés.");
+      return databaseError("Impossible d'enregistrer les concurrents détectés.");
     }
 
     return successResponse({ competitors });

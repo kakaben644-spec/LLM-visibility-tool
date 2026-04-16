@@ -10,6 +10,7 @@ import {
   AppError,
   API_ERROR_CODES,
 } from "@/lib/utils/api-error";
+import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 export const maxDuration = 8;
 
@@ -67,6 +68,9 @@ interface AuditRow {
 // ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(req, "audit:start", 3, 3600);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {
@@ -87,7 +91,7 @@ export async function POST(req: NextRequest) {
       .single<OnboardingSessionRow>();
 
     if (sessionError || !session) {
-      throw notFound("Session introuvable ou déjà terminée.");
+      return notFound("Session introuvable ou déjà terminée.");
     }
 
     // b) Vérifier brand_name et brand_url
@@ -114,7 +118,7 @@ export async function POST(req: NextRequest) {
 
     if (brandError || !brand) {
       console.error("[audit/start] brand insert error:", brandError);
-      throw databaseError("Impossible de créer la marque.");
+      return databaseError("Impossible de créer la marque.");
     }
 
     const brandId = brand.id;
@@ -139,7 +143,7 @@ export async function POST(req: NextRequest) {
 
     if (promptsError || !insertedPrompts) {
       console.error("[audit/start] prompts insert error:", promptsError);
-      throw databaseError("Impossible de créer les prompts.");
+      return databaseError("Impossible de créer les prompts.");
     }
 
     // e) INSERT competitors
@@ -162,7 +166,7 @@ export async function POST(req: NextRequest) {
 
       if (compError) {
         console.error("[audit/start] competitors insert error:", compError);
-        throw databaseError("Impossible de créer les concurrents.");
+        return databaseError("Impossible de créer les concurrents.");
       }
     }
 
@@ -179,7 +183,7 @@ export async function POST(req: NextRequest) {
 
     if (auditError || !audit) {
       console.error("[audit/start] audit insert error:", auditError);
-      throw databaseError("Impossible de créer l'audit.");
+      return databaseError("Impossible de créer l'audit.");
     }
 
     const prompts = (insertedPrompts as PromptInserted[]).map((p) => ({
