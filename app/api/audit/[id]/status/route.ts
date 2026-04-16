@@ -19,6 +19,7 @@ interface AuditRow {
   id: string;
   brand_id: string;
   status: string;
+  created_at: string;
 }
 
 interface LlmResponseRow {
@@ -45,7 +46,7 @@ export async function GET(
     // a) SELECT audit
     const { data: audit, error: auditError } = await supabase
       .from("audits")
-      .select("id, brand_id, status")
+      .select("id, brand_id, status, created_at")
       .eq("id", auditId)
       .single<AuditRow>();
 
@@ -92,13 +93,15 @@ export async function GET(
       ...new Set(llmResponses.filter((r) => r.error).map((r) => r.llm_name)),
     ];
 
-    // d) Si toutes les réponses reçues → marquer completed
+    // d) Marquer completed si toutes les réponses reçues OU si le temps
+    //    imparti est écoulé (12s/appel = 10s maxDuration + 2s buffer)
+    const elapsedMs = Date.now() - new Date(audit.created_at).getTime();
+    const timeoutMs = expectedResponses * 12000;
+    const allReceived = expectedResponses > 0 && totalResponses >= expectedResponses;
+    const timedOut = expectedResponses > 0 && elapsedMs > timeoutMs;
+
     let status = audit.status as AuditStatus;
-    if (
-      expectedResponses > 0 &&
-      totalResponses >= expectedResponses &&
-      status === "running"
-    ) {
+    if ((allReceived || timedOut) && status === "running") {
       const { error: updateError } = await supabase
         .from("audits")
         .update({ status: "completed", completed_at: new Date().toISOString() })
