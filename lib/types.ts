@@ -214,6 +214,7 @@ export interface ExportOptions {
 
 export interface LLMCallResult {
   response_text: string;
+  success: boolean;
   tokens_used?: number;
   latency_ms: number;
   error?: string;

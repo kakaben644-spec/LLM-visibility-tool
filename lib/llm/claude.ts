@@ -22,12 +22,15 @@ export async function callClaude(promptText: string): Promise<LLMCallResult> {
 
     return {
       response_text: text,
+      success: true,
       tokens_used: response.usage.input_tokens + response.usage.output_tokens,
       latency_ms: Date.now() - start,
     };
   } catch (err) {
+    console.error("[callClaude] LLM call failed:", err);
     return {
       response_text: "",
+      success: false,
       latency_ms: Date.now() - start,
       error: err instanceof Error ? err.message : "Erreur Claude inconnue",
     };

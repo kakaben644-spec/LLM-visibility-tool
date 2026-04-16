@@ -72,6 +72,11 @@ export async function POST(req: NextRequest) {
         break;
     }
 
+    if (!llmResult.success) {
+      console.warn("[run-llm] Skipping DB insert for failed LLM call:", input.llm_name);
+      return errorResponse("LLM call failed, response not recorded", "LLM_ERROR", 502);
+    }
+
     const supabase = getSupabaseAdmin();
 
     // b) INSERT llm_responses

@@ -18,12 +18,15 @@ export async function callGemini(promptText: string): Promise<LLMCallResult> {
 
     return {
       response_text: text,
+      success: true,
       tokens_used: result.response.usageMetadata?.totalTokenCount,
       latency_ms: Date.now() - start,
     };
   } catch (err) {
+    console.error("[callGemini] LLM call failed:", err);
     return {
       response_text: "",
+      success: false,
       latency_ms: Date.now() - start,
       error: err instanceof Error ? err.message : "Erreur Gemini inconnue",
     };

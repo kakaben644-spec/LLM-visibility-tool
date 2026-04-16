@@ -19,12 +19,15 @@ export async function callOpenAI(promptText: string): Promise<LLMCallResult> {
 
     return {
       response_text: response.choices[0]?.message?.content ?? "",
+      success: true,
       tokens_used: response.usage?.total_tokens,
       latency_ms: Date.now() - start,
     };
   } catch (err) {
+    console.error("[callOpenAI] LLM call failed:", err);
     return {
       response_text: "",
+      success: false,
       latency_ms: Date.now() - start,
       error: err instanceof Error ? err.message : "Erreur OpenAI inconnue",
     };
