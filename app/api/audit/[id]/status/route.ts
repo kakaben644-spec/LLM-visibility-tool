@@ -94,9 +94,11 @@ export async function GET(
     ];
 
     // d) Marquer completed si toutes les réponses reçues OU si le temps
-    //    imparti est écoulé (12s/appel = 10s maxDuration + 2s buffer)
+    //    imparti est écoulé. Threshold : 5s/appel (moyenne réelle entre
+    //    appels rapides en erreur et appels LLM lents), ce qui donne
+    //    120s pour 24 appels — inférieur au timeout client de 180s.
     const elapsedMs = Date.now() - new Date(audit.created_at).getTime();
-    const timeoutMs = expectedResponses * 12000;
+    const timeoutMs = expectedResponses * 5000;
     const allReceived = expectedResponses > 0 && totalResponses >= expectedResponses;
     const timedOut = expectedResponses > 0 && elapsedMs > timeoutMs;
 
