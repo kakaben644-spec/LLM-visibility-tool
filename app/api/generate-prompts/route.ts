@@ -35,15 +35,11 @@ interface ClaudePromptsResponse {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Tu es un expert en stratégie de contenu et en référencement dans les LLMs.
-À partir du contenu d'un site web, génère entre 6 et 8 questions en français
-qu'un utilisateur pourrait poser à un LLM (GPT-4, Claude, Gemini) pour trouver
-une solution comme celle proposée par cette marque.
-Réponds UNIQUEMENT avec un JSON valide, sans markdown ni backticks.
+const SYSTEM_PROMPT = `You are an expert at crafting audit questions. You MUST respond with ONLY a raw JSON array — no markdown, no backticks, no explanation, no preamble. Your entire response must be parseable by JSON.parse() directly.
 Format : { "prompts": [{ "text": "...", "category": "Découverte|Comparatif|Réputation|Éducatif" }] }
 Règles :
 
-6 à 8 questions minimum
+6 à 8 questions minimum en français
 Au moins 1 question par catégorie
 Questions naturelles, comme si un vrai utilisateur les tapait dans un chat`;
 
@@ -74,7 +70,7 @@ function buildUserMessage(brandName: string, scrapedContent: string): string {
   if (scrapedContent.trim() === "") {
     return `Génère au moins 4 questions génériques pour la marque suivante : "${brandName}". La marque n'a pas de contenu de site disponible.`;
   }
-  const truncated = scrapedContent.slice(0, 2000);
+  const truncated = scrapedContent.slice(0, 4000);
   return `Marque : "${brandName}"\n\nContenu du site :\n${truncated}`;
 }
 
@@ -102,10 +98,15 @@ async function callClaudeForPrompts(
   });
 
   const firstBlock = response.content[0];
-  const rawText = firstBlock?.type === "text" ? firstBlock.text.trim() : "";
+  const raw = firstBlock?.type === "text" ? firstBlock.text.trim() : "";
+
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
 
   try {
-    const parsed = JSON.parse(rawText) as ClaudePromptsResponse;
+    const parsed = JSON.parse(cleaned) as ClaudePromptsResponse;
     if (
       parsed &&
       Array.isArray(parsed.prompts) &&
@@ -117,7 +118,9 @@ async function callClaudeForPrompts(
       return parsed.prompts;
     }
     return getFallbackPrompts(brandName);
-  } catch {
+  } catch (e) {
+    console.error("[generate-prompts] JSON.parse failed:", e);
+    console.error("[generate-prompts] Raw response was:", raw);
     return getFallbackPrompts(brandName);
   }
 }
