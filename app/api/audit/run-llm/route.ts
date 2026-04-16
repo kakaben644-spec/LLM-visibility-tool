@@ -13,7 +13,7 @@ import { callGemini } from "@/lib/llm/gemini";
 import { detectMentions } from "@/lib/utils/mentions";
 import type { LLMCallResult } from "@/lib/types";
 
-export const maxDuration = 8;
+export const maxDuration = 10;
 
 // ---------------------------------------------------------------------------
 // Schéma Zod
