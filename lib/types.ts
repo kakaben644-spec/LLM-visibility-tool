@@ -212,7 +212,7 @@ export interface ExportOptions {
 
 // ─── LLM Names ────────────────────────────────────────────────────────────────
 
-export type LlmName = "claude" | "openai" | "gemini" | "mistral";
+export type LlmName = "claude-haiku" | "mistral";
 
 // ─── LLM Call Result ──────────────────────────────────────────────────────────
 

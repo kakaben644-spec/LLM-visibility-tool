@@ -8,9 +8,7 @@ import {
   databaseError,
 } from "@/lib/utils/api-error";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
-import { callOpenAI } from "@/lib/llm/openai";
 import { callClaude } from "@/lib/llm/claude";
-import { callGemini } from "@/lib/llm/gemini";
 import { callMistral } from "@/lib/llm/mistral";
 import { detectMentions } from "@/lib/utils/mentions";
 import type { LLMCallResult } from "@/lib/types";
@@ -25,7 +23,7 @@ const bodySchema = z.object({
   audit_id: z.string().uuid("audit_id doit être un UUID valide"),
   prompt_id: z.string().uuid("prompt_id doit être un UUID valide"),
   prompt_text: z.string().min(1),
-  llm_name: z.enum(["gpt-4o", "claude-sonnet", "gemini-pro", "mistral-small"]),
+  llm_name: z.enum(["claude-haiku", "mistral"]),
   brand_name: z.string().min(1),
   competitors: z.array(
     z.object({
@@ -62,16 +60,11 @@ export async function POST(req: NextRequest) {
     // a) Appeler le bon LLM
     let llmResult: LLMCallResult;
     switch (input.llm_name) {
-      case "gpt-4o":
-        llmResult = await callOpenAI(input.prompt_text);
-        break;
-      case "claude-sonnet":
+      case "claude-haiku":
         llmResult = await callClaude(input.prompt_text);
         break;
-      case "gemini-pro":
-        llmResult = await callGemini(input.prompt_text);
-        break;
-      case "mistral-small":
+      case "mistral":
+        console.log("[run-llm] calling mistral");
         llmResult = await callMistral(input.prompt_text);
         break;
     }

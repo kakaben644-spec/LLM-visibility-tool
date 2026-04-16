@@ -12,7 +12,7 @@ export async function callClaude(promptText: string): Promise<LLMCallResult> {
   try {
     const client = getClient();
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 500,
       messages: [{ role: "user", content: promptText }],
     });
