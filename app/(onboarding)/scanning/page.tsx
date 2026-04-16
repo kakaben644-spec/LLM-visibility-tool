@@ -96,7 +96,7 @@ export default function ScanningPage() {
             cleanup();
             setStatus("timeout");
           }
-        }, 60000);
+        }, 180000);
 
         setStatus("running");
         const totalCalls = LLMS.length * prompts.length;
