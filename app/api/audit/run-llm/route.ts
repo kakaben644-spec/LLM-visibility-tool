@@ -7,7 +7,6 @@ import {
   successResponse,
   databaseError,
 } from "@/lib/utils/api-error";
-import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { callClaude } from "@/lib/llm/claude";
 import { callMistral } from "@/lib/llm/mistral";
 import { detectMentions } from "@/lib/utils/mentions";
@@ -46,9 +45,6 @@ interface LlmResponseRow {
 // ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
-  const rateLimitResponse = await checkRateLimit(req, "audit:run-llm", 5, 3600);
-  if (rateLimitResponse) return rateLimitResponse;
-
   try {
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {

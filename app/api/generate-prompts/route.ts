@@ -9,7 +9,6 @@ import {
   AppError,
   API_ERROR_CODES,
 } from "@/lib/utils/api-error";
-import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { fetchSerperContext } from "@/lib/utils/serper";
 
 export const maxDuration = 10;
@@ -139,9 +138,6 @@ async function callClaudeForPrompts(
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const rateLimitResponse = await checkRateLimit(req, "generate-prompts", 10, 3600);
-  if (rateLimitResponse) return rateLimitResponse;
-
   try {
     const body: unknown = await req.json().catch(() => null);
     if (body === null) {
