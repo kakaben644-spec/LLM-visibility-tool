@@ -30,6 +30,8 @@ const selectedPromptSchema = z.object({
 
 const competitorItemSchema = z.object({
   name: z.string().min(1),
+  // The onboarding session stores competitors as { name, url } (set by detect-competitors).
+  // The DB column is `domain`, so we accept `url` here and remap on insert.
   url: z.string().min(1),
 });
 

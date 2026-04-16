@@ -71,6 +71,21 @@ export interface LlmResult {
 
 // ─── Scores ────────────────────────────────────────────────────────────────────
 
+export interface ScoreRankingEntry {
+  entity_name: string;
+  entity_type: "brand" | "competitor";
+  total_score: number;
+  score_gpt4o: number;
+  score_claude: number;
+  score_gemini: number;
+}
+
+export interface AuditScoreApiData {
+  brand_name: string;
+  brand_score: number;
+  ranking: ScoreRankingEntry[];
+}
+
 export interface ScoreBreakdown {
   visibility: number;      // 0–100 : fréquence de mention
   recommendation: number;  // 0–100 : fréquence de recommandation
@@ -202,6 +217,17 @@ export interface LLMCallResult {
   tokens_used?: number;
   latency_ms: number;
   error?: string;
+}
+
+// ─── LLM Response (from llm_responses joined with prompts) ───────────────────
+
+export interface LlmResponse {
+  id: string;
+  prompt_id: string;
+  prompt_text: string;
+  llm_name: string;
+  response_text: string | null;
+  error: string | null;
 }
 
 // ─── Mention Analysis ─────────────────────────────────────────────────────────
