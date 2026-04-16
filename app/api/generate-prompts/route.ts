@@ -74,7 +74,8 @@ function buildUserMessage(brandName: string, scrapedContent: string): string {
   if (scrapedContent.trim() === "") {
     return `Génère au moins 4 questions génériques pour la marque suivante : "${brandName}". La marque n'a pas de contenu de site disponible.`;
   }
-  return `Marque : "${brandName}"\n\nContenu du site :\n${scrapedContent}`;
+  const truncated = scrapedContent.slice(0, 2000);
+  return `Marque : "${brandName}"\n\nContenu du site :\n${truncated}`;
 }
 
 async function callClaudeForPrompts(
@@ -89,7 +90,7 @@ async function callClaudeForPrompts(
   const client = new Anthropic({ apiKey });
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
     system: SYSTEM_PROMPT,
     messages: [
