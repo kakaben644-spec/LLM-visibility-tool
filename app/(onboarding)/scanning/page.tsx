@@ -49,7 +49,6 @@ export default function ScanningPage() {
 
     const run = async () => {
       try {
-        // 1. Get session
         const sessionRes = await fetch(
           `/api/onboarding/session?token=${sessionToken}`
         );
@@ -60,7 +59,6 @@ export default function ScanningPage() {
         };
         const { brand_name, competitors } = sessionData;
 
-        // 2. Start audit
         setCurrentLabel("Démarrage de l'audit...");
         const startRes = await fetch("/api/audit/start", {
           method: "POST",
@@ -74,7 +72,6 @@ export default function ScanningPage() {
         const { audit_id, prompts } = startData.data;
         localStorage.setItem("llmv_current_audit", audit_id);
 
-        // 3. Start polling
         pollingRef.current = setInterval(async () => {
           try {
             const statusRes = await fetch(`/api/audit/${audit_id}/status`);
@@ -94,7 +91,6 @@ export default function ScanningPage() {
           }
         }, 2000);
 
-        // 4. Global timeout 60s
         timeoutRef.current = setTimeout(() => {
           if (!doneRef.current) {
             doneRef.current = true;
@@ -103,7 +99,6 @@ export default function ScanningPage() {
           }
         }, 60000);
 
-        // 5. Sequential LLM calls
         setStatus("running");
         const totalCalls = LLMS.length * prompts.length;
         let completed = 0;
@@ -129,7 +124,7 @@ export default function ScanningPage() {
                 }),
               });
             } catch {
-              // silent failure, continue
+              // silent failure
             }
             completed++;
             setCurrentLabel(
