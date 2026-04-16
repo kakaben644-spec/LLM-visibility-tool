@@ -152,3 +152,7 @@ Ce script (`start-dev.sh`) lit les clés depuis `.env.local` et les exporte avan
 - Run `tsc --noEmit` and fix any type errors before finishing.
 - Commit with message: "feat: [étape ID] — description courte"
 - Do not push, do not create a PR.
+
+## Visualisation & Architecture
+- **Mermaid**: Use Mermaid syntax to explain complex logic or database schemas. 
+- If a visual is needed, generate a `diagram.mmd` file and suggest the PO to preview it (or use `mmdc` to render it if available).
