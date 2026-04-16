@@ -1,391 +1,215 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
-type LlmName = "gpt-4o" | "claude-sonnet" | "gemini-pro"
-type LlmRowStatus = "waiting" | "running" | "completed"
-type Phase = "init" | "running" | "error" | "timeout"
-
-interface SessionCompetitor {
-  name: string
-  url: string
+interface Competitor {
+  name: string;
+  url: string;
 }
 
 interface Prompt {
-  id: string
-  text: string
-  category: string | null
+  id: string;
+  text: string;
 }
 
-interface SessionData {
-  brand_name: string | null
-  competitors: unknown[]
-}
+type ScanStatus = "init" | "running" | "done" | "error" | "timeout";
 
-interface SessionApiResponse {
-  ok: boolean
-  data: SessionData
-}
-
-interface AuditStartData {
-  audit_id: string
-  brand_id: string
-  prompts: Prompt[]
-}
-
-interface AuditStartApiResponse {
-  ok: boolean
-  data: AuditStartData
-}
-
-interface AuditStatusData {
-  audit_id: string
-  status: string
-  progress_pct: number
-  completed_llms: string[]
-  failed_llms: string[]
-  total_responses: number
-  expected_responses: number
-}
-
-interface AuditStatusApiResponse {
-  ok: boolean
-  data: AuditStatusData
-}
-
-// ─── Constants ─────────────────────────────────────────────────────────────────
-
-const LLM_NAMES: LlmName[] = ["gpt-4o", "claude-sonnet", "gemini-pro"]
+const LLMS = ["gpt-4o", "claude-sonnet", "gemini-pro"] as const;
+type LlmName = (typeof LLMS)[number];
 
 const LLM_LABELS: Record<LlmName, string> = {
   "gpt-4o": "GPT-4o",
   "claude-sonnet": "Claude",
   "gemini-pro": "Gemini",
-}
-
-const POLL_INTERVAL_MS = 2000
-const GLOBAL_TIMEOUT_MS = 60_000
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function isValidCompetitor(c: unknown): c is SessionCompetitor {
-  if (typeof c !== "object" || c === null) return false
-  const obj = c as Record<string, unknown>
-  return typeof obj.name === "string" && typeof obj.url === "string"
-}
-
-// ─── Component ─────────────────────────────────────────────────────────────────
+};
 
 export default function ScanningPage() {
-  const router = useRouter()
-
-  const [phase, setPhase] = useState<Phase>("init")
-  const [brandName, setBrandName] = useState<string>("")
-  const [progressPct, setProgressPct] = useState<number>(0)
-  const [totalPrompts, setTotalPrompts] = useState<number>(0)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-
-  const [llmStatus, setLlmStatus] = useState<Record<LlmName, LlmRowStatus>>({
-    "gpt-4o": "waiting",
-    "claude-sonnet": "waiting",
-    "gemini-pro": "waiting",
-  })
-
-  // tracks how many prompts have been called for each LLM (1-based, shown in UI)
-  const [llmPromptCount, setLlmPromptCount] = useState<Record<LlmName, number>>({
-    "gpt-4o": 0,
-    "claude-sonnet": 0,
-    "gemini-pro": 0,
-  })
-
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // guards against double-redirect between polling and timeout
-  const doneRef = useRef<boolean>(false)
+  const router = useRouter();
+  const [status, setStatus] = useState<ScanStatus>("init");
+  const [progressPct, setProgressPct] = useState(0);
+  const [currentLabel, setCurrentLabel] = useState("Initialisation...");
+  const [completedLlms, setCompletedLlms] = useState<Set<LlmName>>(new Set());
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const doneRef = useRef(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    let cancelled = false
-
-    const stopTimers = () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    const sessionToken = localStorage.getItem("llmv_session");
+    if (!sessionToken) {
+      router.push("/step-1");
+      return;
     }
 
+    const cleanup = () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+
     const run = async () => {
-      // ── 1. Read session_token ──────────────────────────────────────────────
-      const sessionToken = localStorage.getItem("llmv_session")
-      if (!sessionToken) {
-        router.replace("/step-1")
-        return
-      }
-
-      // ── 2. Fetch session data ──────────────────────────────────────────────
-      let fetchedBrandName = ""
-      let competitors: SessionCompetitor[] = []
-
       try {
-        const res = await fetch(`/api/onboarding/session?token=${sessionToken}`)
-        const json = (await res.json()) as SessionApiResponse
-        if (!json.ok) throw new Error("Session introuvable")
-        fetchedBrandName = json.data.brand_name ?? ""
-        competitors = (json.data.competitors as unknown[]).filter(isValidCompetitor)
-      } catch {
-        if (!cancelled) {
-          setErrorMessage("Impossible de récupérer la session. Merci de recommencer.")
-          setPhase("error")
-        }
-        return
-      }
+        // 1. Get session
+        const sessionRes = await fetch(
+          `/api/onboarding/session?token=${sessionToken}`
+        );
+        if (!sessionRes.ok) throw new Error("Session introuvable");
+        const sessionData = await sessionRes.json() as {
+          brand_name: string;
+          competitors: Competitor[];
+        };
+        const { brand_name, competitors } = sessionData;
 
-      if (cancelled) return
-      setBrandName(fetchedBrandName)
-
-      // ── 3. Start audit ─────────────────────────────────────────────────────
-      let auditId = ""
-      let prompts: Prompt[] = []
-
-      try {
-        const res = await fetch("/api/audit/start", {
+        // 2. Start audit
+        setCurrentLabel("Démarrage de l'audit...");
+        const startRes = await fetch("/api/audit/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ session_token: sessionToken }),
-        })
-        const json = (await res.json()) as AuditStartApiResponse
-        if (!json.ok) throw new Error("Impossible de démarrer l'audit")
-        auditId = json.data.audit_id
-        prompts = json.data.prompts
-      } catch {
-        if (!cancelled) {
-          setErrorMessage("Impossible de démarrer l'audit. Merci de réessayer.")
-          setPhase("error")
-        }
-        return
-      }
+        });
+        if (!startRes.ok) throw new Error("Impossible de démarrer l'audit");
+        const startData = await startRes.json() as {
+          data: { audit_id: string; prompts: Prompt[] };
+        };
+        const { audit_id, prompts } = startData.data;
+        localStorage.setItem("llmv_current_audit", audit_id);
 
-      if (cancelled) return
-
-      // ── 4. Persist audit_id ────────────────────────────────────────────────
-      localStorage.setItem("llmv_current_audit", auditId)
-      setTotalPrompts(prompts.length)
-      setPhase("running")
-
-      // ── 5. Polling (every 2s) ──────────────────────────────────────────────
-      intervalRef.current = setInterval(async () => {
-        if (doneRef.current || cancelled) return
-        try {
-          const res = await fetch(`/api/audit/${auditId}/status`)
-          const json = (await res.json()) as AuditStatusApiResponse
-          if (!json.ok) return
-          setProgressPct(json.data.progress_pct)
-          if (json.data.status === "completed" && !doneRef.current) {
-            doneRef.current = true
-            stopTimers()
-            router.push("/dashboard")
-          }
-        } catch {
-          // non-fatal, polling continues on next tick
-        }
-      }, POLL_INTERVAL_MS)
-
-      // ── 6. Global 60s timeout ──────────────────────────────────────────────
-      timeoutRef.current = setTimeout(() => {
-        if (!doneRef.current) {
-          doneRef.current = true
-          stopTimers()
-          setPhase("timeout")
-        }
-      }, GLOBAL_TIMEOUT_MS)
-
-      // ── 7. Sequential LLM calls: outer = LLMs, inner = prompts ────────────
-      for (const llm of LLM_NAMES) {
-        if (cancelled || doneRef.current) break
-
-        setLlmStatus((prev) => ({ ...prev, [llm]: "running" }))
-
-        for (let i = 0; i < prompts.length; i++) {
-          if (cancelled || doneRef.current) break
-
-          const prompt = prompts[i]
-          setLlmPromptCount((prev) => ({ ...prev, [llm]: i + 1 }))
-
+        // 3. Start polling
+        pollingRef.current = setInterval(async () => {
           try {
-            await fetch("/api/audit/run-llm", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                audit_id: auditId,
-                prompt_id: prompt.id,
-                prompt_text: prompt.text,
-                llm_name: llm,
-                brand_name: fetchedBrandName,
-                // session stores url, run-llm expects domain
-                competitors: competitors.map((c) => ({ name: c.name, domain: c.url })),
-              }),
-            })
+            const statusRes = await fetch(`/api/audit/${audit_id}/status`);
+            if (!statusRes.ok) return;
+            const statusData = await statusRes.json() as {
+              data: { status: string; progress_pct: number };
+            };
+            const { status: auditStatus, progress_pct } = statusData.data;
+            setProgressPct(progress_pct ?? 0);
+            if (auditStatus === "completed" && !doneRef.current) {
+              doneRef.current = true;
+              cleanup();
+              router.push("/dashboard");
+            }
           } catch {
-            // silent failure — always continue to next call
+            // silent
           }
-        }
+        }, 2000);
 
-        if (!cancelled) {
-          setLlmStatus((prev) => ({ ...prev, [llm]: "completed" }))
+        // 4. Global timeout 60s
+        timeoutRef.current = setTimeout(() => {
+          if (!doneRef.current) {
+            doneRef.current = true;
+            cleanup();
+            setStatus("timeout");
+          }
+        }, 60000);
+
+        // 5. Sequential LLM calls
+        setStatus("running");
+        const totalCalls = LLMS.length * prompts.length;
+        let completed = 0;
+
+        for (const llm of LLMS) {
+          setCurrentLabel(`Interrogation de ${LLM_LABELS[llm]}...`);
+          for (const prompt of prompts) {
+            if (doneRef.current) break;
+            try {
+              await fetch("/api/audit/run-llm", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  audit_id,
+                  prompt_id: prompt.id,
+                  prompt_text: prompt.text,
+                  llm_name: llm,
+                  brand_name,
+                  competitors: competitors.map((c) => ({
+                    name: c.name,
+                    domain: c.url,
+                  })),
+                }),
+              });
+            } catch {
+              // silent failure, continue
+            }
+            completed++;
+            setCurrentLabel(
+              `Interrogation de ${LLM_LABELS[llm]}... (${completed}/${totalCalls} prompts)`
+            );
+          }
+          setCompletedLlms((prev) => new Set([...prev, llm]));
         }
+      } catch (err) {
+        setErrorMessage(
+          err instanceof Error ? err.message : "Erreur inconnue"
+        );
+        setStatus("error");
       }
-    }
+    };
 
-    run()
+    void run();
+    return cleanup;
+  }, [router]);
 
-    return () => {
-      cancelled = true
-      stopTimers()
-    }
-  }, [router])
-
-  // ─── Error / timeout UI ───────────────────────────────────────────────────────
-
-  if (phase === "error" || phase === "timeout") {
+  if (status === "error") {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-        <div className="text-center space-y-6">
-          <div className="space-y-2">
-            <p className="text-white text-xl font-semibold">
-              {phase === "timeout" ? "Délai dépassé" : "Une erreur est survenue"}
-            </p>
-            <p className="text-gray-400 text-sm max-w-sm mx-auto">
-              {phase === "timeout"
-                ? "L'analyse a pris trop de temps. Merci de réessayer."
-                : (errorMessage ?? "Une erreur inattendue est survenue.")}
-            </p>
-          </div>
-          <button
-            onClick={() => router.push("/step-1")}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Réessayer
-          </button>
-        </div>
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[#0F0F1A] text-white">
+        <p className="text-lg font-semibold">Une erreur est survenue</p>
+        <p className="text-sm text-white/60">{errorMessage}</p>
+        <button
+          onClick={() => router.push("/step-1")}
+          className="rounded-lg bg-[#6B54FA] px-6 py-2 text-sm font-medium hover:bg-[#5a44e0]"
+        >
+          Réessayer
+        </button>
       </div>
-    )
+    );
   }
 
-  // ─── Main scanning UI ─────────────────────────────────────────────────────────
+  if (status === "timeout") {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[#0F0F1A] text-white">
+        <p className="text-lg font-semibold">Délai dépassé</p>
+        <p className="text-sm text-white/60">
+          L&apos;analyse a pris trop de temps. Merci de réessayer.
+        </p>
+        <button
+          onClick={() => router.push("/step-1")}
+          className="rounded-lg bg-[#6B54FA] px-6 py-2 text-sm font-medium hover:bg-[#5a44e0]"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-lg space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-semibold text-white">Analyse en cours</h1>
-          {brandName ? (
-            <p className="text-gray-400 text-sm">
-              Nous analysons la visibilité de{" "}
-              <span className="text-white font-medium">{brandName}</span>
-            </p>
-          ) : (
-            <p className="text-gray-600 text-sm">Initialisation...</p>
-          )}
+    <div className="flex h-screen flex-col items-center justify-center gap-8 bg-[#0F0F1A] text-white">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#6B54FA] border-t-transparent" />
+        <p className="text-sm text-white/60">{currentLabel}</p>
+      </div>
+      <div className="w-64">
+        <div className="mb-2 flex justify-between text-xs text-white/40">
+          <span>Progression</span>
+          <span>{Math.round(progressPct)}%</span>
         </div>
-
-        {/* Progress bar */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-xs text-gray-500">
-            <span>Progression globale</span>
-            <span>{progressPct}%</span>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-[#6B54FA] transition-all duration-500"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+      <div className="flex flex-col gap-3">
+        {LLMS.map((llm) => (
+          <div key={llm} className="flex items-center gap-3">
+            <span className="text-lg">
+              {completedLlms.has(llm) ? "✅" : "⏳"}
+            </span>
+            <span className="text-sm text-white/80">{LLM_LABELS[llm]}</span>
           </div>
-          <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
-            <div
-              className="h-1.5 bg-indigo-500 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-        </div>
-
-        {/* LLM rows */}
-        <div className="space-y-3">
-          {LLM_NAMES.map((llm) => {
-            const status = llmStatus[llm]
-            const count = llmPromptCount[llm]
-            const label = LLM_LABELS[llm]
-
-            return (
-              <div
-                key={llm}
-                className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-5 py-4"
-              >
-                <div className="space-y-0.5">
-                  <p className="text-white text-sm font-medium">{label}</p>
-                  {status === "waiting" && (
-                    <p className="text-gray-600 text-xs">En attente...</p>
-                  )}
-                  {status === "running" && (
-                    <p className="text-indigo-400 text-xs">
-                      Interrogation de {label}...{" "}
-                      {totalPrompts > 0 && (
-                        <span>
-                          ({count}/{totalPrompts} prompts)
-                        </span>
-                      )}
-                    </p>
-                  )}
-                  {status === "completed" && (
-                    <p className="text-green-400 text-xs">Analyse terminée</p>
-                  )}
-                </div>
-
-                <div className="flex-shrink-0 ml-4">
-                  {status === "waiting" && (
-                    <span className="block w-5 h-5 rounded-full border-2 border-gray-700" />
-                  )}
-                  {status === "running" && (
-                    <svg
-                      className="w-5 h-5 animate-spin text-indigo-400"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                      />
-                    </svg>
-                  )}
-                  {status === "completed" && (
-                    <svg
-                      className="w-5 h-5 text-green-400"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Footer note */}
-        <p className="text-center text-gray-700 text-xs">
-          Cette analyse peut prendre jusqu&apos;à 60 secondes. Ne fermez pas cette page.
-        </p>
+        ))}
       </div>
     </div>
-  )
+  );
 }
