@@ -29,7 +29,7 @@ const selectedPromptSchema = z.object({
 
 const competitorItemSchema = z.object({
   name: z.string().min(1),
-  domain: z.string().min(1),
+  url: z.string().min(1),
 });
 
 // ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
         parsedCompetitors.map((c) => ({
           brand_id: brandId,
           name: c.name,
-          domain: c.domain,
+          domain: c.url,
           auto_detected: true,
         }))
       );
