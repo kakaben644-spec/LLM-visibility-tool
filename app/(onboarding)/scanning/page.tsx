@@ -53,11 +53,10 @@ export default function ScanningPage() {
           `/api/onboarding/session?token=${sessionToken}`
         );
         if (!sessionRes.ok) throw new Error("Session introuvable");
-        const sessionData = await sessionRes.json() as {
-          brand_name: string;
-          competitors: Competitor[];
+        const sessionJson = await sessionRes.json() as {
+          data: { brand_name: string; competitors: Competitor[] };
         };
-        const { brand_name, competitors } = sessionData;
+        const { brand_name, competitors } = sessionJson.data;
 
         setCurrentLabel("Démarrage de l'audit...");
         const startRes = await fetch("/api/audit/start", {
