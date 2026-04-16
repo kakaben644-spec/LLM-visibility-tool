@@ -10,6 +10,7 @@ import {
   API_ERROR_CODES,
 } from "@/lib/utils/api-error";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { fetchSerperContext } from "@/lib/utils/serper";
 
 export const maxDuration = 10;
 
@@ -66,17 +67,27 @@ function getFallbackPrompts(brandName: string): GeneratedPrompt[] {
   ];
 }
 
-function buildUserMessage(brandName: string, scrapedContent: string): string {
-  if (scrapedContent.trim() === "") {
-    return `Génère au moins 4 questions génériques pour la marque suivante : "${brandName}". La marque n'a pas de contenu de site disponible.`;
+function buildUserMessage(brandName: string, scrapedContent: string, serperContext: string): string {
+  const parts: string[] = [`Marque : "${brandName}"`];
+
+  if (serperContext.trim() !== "") {
+    parts.push(`\nRésultats de recherche Google :\n${serperContext}`);
   }
-  const truncated = scrapedContent.slice(0, 4000);
-  return `Marque : "${brandName}"\n\nContenu du site :\n${truncated}`;
+
+  if (scrapedContent.trim() !== "") {
+    const truncated = scrapedContent.slice(0, 4000);
+    parts.push(`\nContenu du site :\n${truncated}`);
+  } else {
+    parts.push("\nAucun contenu de site disponible.");
+  }
+
+  return parts.join("\n");
 }
 
 async function callClaudeForPrompts(
   brandName: string,
-  scrapedContent: string
+  scrapedContent: string,
+  serperContext: string
 ): Promise<GeneratedPrompt[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -92,7 +103,7 @@ async function callClaudeForPrompts(
     messages: [
       {
         role: "user",
-        content: buildUserMessage(brandName, scrapedContent),
+        content: buildUserMessage(brandName, scrapedContent, serperContext),
       },
     ],
   });
@@ -144,8 +155,11 @@ export async function POST(req: NextRequest) {
     const input = bodySchema.parse(body);
     const { scraped_content, brand_name } = input;
 
+    // Enrich context with Google search results (soft-fail: empty string on error)
+    const serperContext = await fetchSerperContext(brand_name);
+
     // Generate prompts via Claude — DB writes happen later in audit/start
-    const prompts = await callClaudeForPrompts(brand_name, scraped_content);
+    const prompts = await callClaudeForPrompts(brand_name, scraped_content, serperContext);
 
     return successResponse({ prompts });
   } catch (err) {
