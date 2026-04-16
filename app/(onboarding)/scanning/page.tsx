@@ -15,13 +15,12 @@ interface Prompt {
 
 type ScanStatus = "init" | "running" | "done" | "error" | "timeout";
 
-const LLMS = ["gpt-4o", "claude-sonnet", "gemini-pro"] as const;
+const LLMS = ["claude-haiku", "mistral"] as const;
 type LlmName = (typeof LLMS)[number];
 
 const LLM_LABELS: Record<LlmName, string> = {
-  "gpt-4o": "GPT-4o",
-  "claude-sonnet": "Claude",
-  "gemini-pro": "Gemini",
+  "claude-haiku": "Claude Haiku",
+  "mistral": "Mistral",
 };
 
 export default function ScanningPage() {
