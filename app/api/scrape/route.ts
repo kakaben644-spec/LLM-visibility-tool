@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { FirecrawlAppV1 as FirecrawlApp } from "@mendable/firecrawl-js";
 
 import {
@@ -57,6 +57,17 @@ export async function POST(req: NextRequest) {
     return successResponse({ content, url });
   } catch (err) {
     if (err instanceof AppError) return errorResponse(err);
+
+    if (err instanceof ZodError) {
+      const firstIssue = err.issues[0];
+      return errorResponse(
+        new AppError(
+          firstIssue?.message ?? "URL invalide",
+          API_ERROR_CODES.VALIDATION_ERROR,
+          400
+        )
+      );
+    }
 
     // Erreur réseau ou URL inaccessible
     const message =

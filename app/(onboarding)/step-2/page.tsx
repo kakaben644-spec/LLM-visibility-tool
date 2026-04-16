@@ -75,10 +75,13 @@ export default function Step2Page() {
     // 1. Scrape brand URL
     if (brandUrl) {
       try {
+        const normalizedUrl = brandUrl.startsWith("http")
+          ? brandUrl
+          : `https://${brandUrl}`;
         const scrapeRes = await fetch("/api/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: brandUrl }),
+          body: JSON.stringify({ url: normalizedUrl }),
         });
         if (scrapeRes.ok) {
           const scrapeJson = (await scrapeRes.json()) as {
