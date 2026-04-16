@@ -68,7 +68,6 @@ export function ResponseAccordion({
   }
 
   const groups = Array.from(groupMap.values());
-  const highlightTerms = [brandName, ...competitors].filter(Boolean);
 
   if (groups.length === 0) {
     return (
@@ -129,7 +128,8 @@ export function ResponseAccordion({
                     ) : (
                       <HighlightedText
                         text={response.response_text}
-                        terms={highlightTerms}
+                        brandTerms={[brandName]}
+                        competitorTerms={competitors}
                       />
                     )}
                   </div>
