@@ -37,6 +37,7 @@ export default function ScanningPage() {
 
   useEffect(() => {
     const sessionToken = localStorage.getItem("llmv_session");
+    console.log("[scanning] sessionToken from localStorage:", sessionToken);
     if (!sessionToken) {
       router.push("/step-1");
       return;
@@ -56,6 +57,7 @@ export default function ScanningPage() {
         const sessionJson = await sessionRes.json() as {
           data: { brand_name: string; competitors: Competitor[] };
         };
+        console.log("[scanning] /api/onboarding/session response:", JSON.stringify(sessionJson));
         const { brand_name, competitors } = sessionJson.data;
 
         setCurrentLabel("Démarrage de l'audit...");
@@ -69,6 +71,8 @@ export default function ScanningPage() {
           data: { audit_id: string; prompts: Prompt[] };
         };
         const { audit_id, prompts } = startData.data;
+        console.log("[scanning] /api/audit/start response:", JSON.stringify(startData));
+        console.log("[scanning] prompts array length:", prompts.length, "prompts:", JSON.stringify(prompts));
         localStorage.setItem("llmv_current_audit", audit_id);
 
         pollingRef.current = setInterval(async () => {
@@ -101,11 +105,13 @@ export default function ScanningPage() {
         setStatus("running");
         const totalCalls = LLMS.length * prompts.length;
         let completed = 0;
+        console.log("[scanning] Starting LLM loop, prompts count:", prompts.length);
 
         for (const llm of LLMS) {
           setCurrentLabel(`Interrogation de ${LLM_LABELS[llm]}...`);
           for (const prompt of prompts) {
             if (doneRef.current) break;
+            console.log("[scanning] Calling run-llm: llm=", llm, "prompt=", prompt.id, prompt.text.slice(0, 60));
             try {
               await fetch("/api/audit/run-llm", {
                 method: "POST",

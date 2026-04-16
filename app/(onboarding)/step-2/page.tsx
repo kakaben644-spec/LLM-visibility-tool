@@ -52,6 +52,7 @@ const CATEGORY_STYLES: Record<
 export default function Step2Page() {
   const router = useRouter();
   const [state, setState] = useState<PageState>({ status: "loading" });
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     void runGeneration();
@@ -181,6 +182,54 @@ export default function Step2Page() {
     }
   }
 
+  async function handleContinue() {
+    if (state.status !== "success") return;
+    const sessionToken = getSessionToken();
+    if (!sessionToken) {
+      router.replace("/step-1");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const patchRes = await fetch("/api/onboarding/session", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_token: sessionToken,
+          current_step: 3,
+          selected_prompts: state.prompts,
+        }),
+      });
+      if (!patchRes.ok) {
+        const patchErr = (await patchRes.json()) as { error?: string };
+        setState((prev) =>
+          prev.status === "success"
+            ? {
+                ...prev,
+                patchError:
+                  patchErr.error ??
+                  "Impossible d'enregistrer les questions sélectionnées. Réessaie.",
+              }
+            : prev
+        );
+        return;
+      }
+      router.push("/step-3");
+    } catch {
+      setState((prev) =>
+        prev.status === "success"
+          ? {
+              ...prev,
+              patchError:
+                "Impossible d'enregistrer les questions sélectionnées. Réessaie.",
+            }
+          : prev
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <div className="flex flex-col h-full px-12 py-10">
       {/* Header */}
@@ -226,11 +275,11 @@ export default function Step2Page() {
       )}
 
       <Button
-        disabled={state.status !== "success" || !state.canContinue}
-        onClick={() => router.push("/step-3")}
+        disabled={state.status !== "success" || !state.canContinue || isSaving}
+        onClick={() => void handleContinue()}
         className="mt-4 w-full h-13 bg-[#6B54FA] hover:bg-[#5A43E8] text-white font-semibold rounded-xl text-[15px] disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Continuer →
+        {isSaving ? "Enregistrement..." : "Continuer →"}
       </Button>
     </div>
   );

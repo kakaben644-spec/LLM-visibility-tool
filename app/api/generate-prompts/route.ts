@@ -2,12 +2,9 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 
-import { getSupabaseAdmin } from "@/lib/supabase/server";
 import {
   errorResponse,
   successResponse,
-  notFound,
-  databaseError,
   llmError,
   AppError,
   API_ERROR_CODES,
@@ -18,7 +15,6 @@ export const maxDuration = 10;
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
 const bodySchema = z.object({
-  session_token: z.string().min(1),
   scraped_content: z.string(),
   brand_name: z.string().min(1),
 });
@@ -138,68 +134,10 @@ export async function POST(req: NextRequest) {
     }
 
     const input = bodySchema.parse(body);
-    const { session_token, scraped_content, brand_name } = input;
+    const { scraped_content, brand_name } = input;
 
-    // 1. Generate prompts via Claude
+    // Generate prompts via Claude — DB writes happen later in audit/start
     const prompts = await callClaudeForPrompts(brand_name, scraped_content);
-
-    // 2. Retrieve brand fields from onboarding_sessions
-    const supabase = getSupabaseAdmin();
-
-    const { data: sessionData, error: sessionError } = await supabase
-      .from("onboarding_sessions")
-      .select("id, brand_name, brand_url, brand_country, account_type")
-      .eq("session_token", session_token)
-      .single<{
-        id: string;
-        brand_name: string | null;
-        brand_url: string | null;
-        brand_country: string;
-        account_type: string;
-      }>();
-
-    if (sessionError || !sessionData) {
-      throw notFound(
-        "Session introuvable ou expirée. Merci de recommencer l'onboarding."
-      );
-    }
-
-    // 3. Insert brand into brands table (required before inserting prompts — FK constraint)
-    const { data: brandData, error: brandError } = await supabase
-      .from("brands")
-      .insert({
-        name: sessionData.brand_name ?? brand_name,
-        url: sessionData.brand_url ?? "",
-        country: sessionData.brand_country ?? "France",
-        account_type: sessionData.account_type ?? "brand",
-        scraped_content: scraped_content,
-        user_id: null,
-      })
-      .select("id")
-      .single<{ id: string }>();
-
-    if (brandError || !brandData) {
-      console.error("[POST /api/generate-prompts] Brand insert error:", brandError);
-      throw databaseError("Impossible de créer la marque.");
-    }
-
-    const brandId = brandData.id;
-
-    // 4. Insert prompts into the prompts table
-    const promptRows = prompts.map((p) => ({
-      brand_id: brandId,
-      text: p.text,
-      category: p.category,
-    }));
-
-    const { error: insertError } = await supabase
-      .from("prompts")
-      .insert(promptRows);
-
-    if (insertError) {
-      console.error("[POST /api/generate-prompts] Supabase insert error:", insertError);
-      throw databaseError("Impossible d'enregistrer les prompts générés.");
-    }
 
     return successResponse({ prompts });
   } catch (err) {
