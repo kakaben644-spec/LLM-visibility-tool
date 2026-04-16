@@ -1,7 +1,7 @@
 # LLM Visibility Tool — Contexte Projet
 
 ## Description
-SaaS B2B qui aide les marques à mesurer leur visibilité dans les LLMs (GPT-4o, Claude, Gemini).
+SaaS B2B qui aide les marques à mesurer leur visibilité dans les LLMs (Claude Haiku, Mistral).
 
 ## Stack Technique
 - **Framework**: Next.js 16 App Router + TypeScript strict
@@ -34,18 +34,20 @@ SaaS B2B qui aide les marques à mesurer leur visibilité dans les LLMs (GPT-4o,
 
 /lib/supabase/client.ts
 /lib/supabase/server.ts
-/lib/llm/openai.ts
-/lib/llm/claude.ts
-/lib/llm/gemini.ts
+/lib/llm/claude.ts          ← claude-haiku-4-5-20251001 uniquement (openai.ts + gemini.ts supprimés)
+/lib/llm/mistral.ts         ← mistral-small-latest via native fetch (nouveau)
 /lib/llm/prompts.ts
-/lib/types.ts
+/lib/types.ts               ← LlmName = "claude-haiku" | "mistral" uniquement
 /lib/utils/score.ts
 /lib/utils/mentions.ts
 /lib/utils/api-error.ts
+/lib/utils/serper.ts        ← enrichissement Serper.dev pour generate-prompts (nouveau)
+/lib/utils/rate-limit.ts    ← conservé mais non utilisé (Upstash Redis retiré)
 /lib/session.ts
 
 /supabase/migrations/001_init.sql
 /supabase/migrations/002_complements.sql
+/supabase/migrations/003_mention_results.sql
 /supabase/migrations/004_scores.sql
 
 /components/features/dashboard/ScoreCard.tsx
@@ -74,17 +76,20 @@ Ce script (`start-dev.sh`) lit les clés depuis `.env.local` et les exporte avan
 
 ## Supabase — tables existantes
 - onboarding_sessions, brands, competitors, prompts
-- audits, llm_responses, mention_results
+- audits, llm_responses
+- mention_results — colonnes ajoutées par 003 : audit_id, prompt_id, llm_name
 - scores — colonnes : id, audit_id, brand_id, entity_name, entity_type,
   total_score, mention_rate, avg_position, sentiment_score,
   score_gpt4o, score_claude, score_gemini, created_at
+  ⚠️ Les colonnes score_gpt4o/score_claude/score_gemini sont héritées du schéma initial ;
+  le pipeline actuel utilise claude-haiku + mistral uniquement.
 - recommendations
 
 ## Migrations appliquées
 - 001_init.sql ✅
 - 002_complements.sql ✅
+- 003_mention_results.sql ✅ (ajout audit_id, prompt_id, llm_name à mention_results)
 - 004_scores.sql ✅
-Note : il n'existe pas de 003 — la numérotation saute de 002 à 004.
 
 ## Statut Sprint 1 ✅ terminé
 - US-20 Setup projet ✅
@@ -97,14 +102,24 @@ Note : il n'existe pas de 003 — la numérotation saute de 002 à 004.
 - US-03 Sélection prompts ✅
 - US-04 Détection concurrents ✅
 
-## Statut Sprint 2
+## Statut Sprint 2 ✅ terminé
 - US-17 Page /scanning ✅
 - US-06 Détection mentions ✅
 - US-07 Score de visibilité ✅
 - US-08 Dashboard résultats ✅
-- US-19 Erreurs et toasts ✅ 
-- US-21 Sécurité API / rate limiting  ✅ 
-- US-18 Relancer un audit ← prochaine
+- US-19 Erreurs et toasts ✅
+- US-21 Sécurité API / rate limiting ✅
+- US-18 Relancer un audit ✅
+
+## Statut Sprint 3
+- Pipeline LLM fonctionnel end-to-end (claude-haiku + mistral) ✅
+- Dashboard affiche score et benchmark ✅
+- Upstash Redis retiré, rate-limit.ts conservé mais inactif ✅
+- À faire :
+  - Section "Détail des réponses" vide (réponses LLM non affichées)
+  - Bouton "Voir les recommandations" blanc/illisible (bug CSS)
+  - Page Recommandations à vérifier
+  - Bouton "Relancer un audit" blanc/illisible (bug CSS)
 
 ## Points techniques importants (bugs résolus)
 - `selected_prompts` doit être écrit dans step-2 en même temps que `generated_prompts`
@@ -113,6 +128,11 @@ Note : il n'existe pas de 003 — la numérotation saute de 002 à 004.
 - Route `GET /api/audit/[id]/score` créée en US-08 (n'existait pas avant)
 - Route `GET /api/audit/[id]/responses` — colonne DB est `text` (pas `prompt_text`)
 - Hydration crash corrigé : ne jamais appeler getBrandName() dans le render body, uniquement dans useEffect
+- `generate-prompts` : stripping des fences JSON + system prompt amélioré + troncature portée à 4000 chars + injection contexte Serper
+- `run-llm` : `success: boolean` ajouté à `LLMCallResult` ; les appels LLM en échec sont ignorés et non insérés en DB
+- `scanning/page.tsx` : liste LLM mise à jour à `["claude-haiku", "mistral"]`
+- `step-2/page.tsx` : brandUrl normalisé avec préfixe `https://` avant l'appel `/api/scrape`
+- `scrape/route.ts` : `ZodError` géré explicitement dans le catch — retourne 400 (pas 422)
 
 ## localStorage keys
 - `llmv_session` → session_token UUID
