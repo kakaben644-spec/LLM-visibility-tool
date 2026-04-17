@@ -387,7 +387,7 @@ export default function DashboardPage() {
 
         {/* Footer CTAs */}
         <div className="flex flex-wrap gap-3 pb-10">
-          <Button onClick={() => router.push("/recommendations")}>
+          <Button onClick={() => router.push("/sign-up")}>
             Voir les recommandations
           </Button>
           <Button
