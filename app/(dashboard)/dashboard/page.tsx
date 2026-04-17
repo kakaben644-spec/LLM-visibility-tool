@@ -46,13 +46,15 @@ interface LlmResponse {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const LLM_ORDER = ["gpt-4o", "claude-sonnet", "gemini-pro"] as const;
+const LLM_ORDER = ["gpt-4o", "claude-sonnet", "claude-haiku", "gemini-pro", "mistral"] as const;
 type LlmName = (typeof LLM_ORDER)[number];
 
 const LLM_LABELS: Record<LlmName, string> = {
   "gpt-4o": "GPT-4o",
-  "claude-sonnet": "Claude",
-  "gemini-pro": "Gemini",
+  "claude-sonnet": "Claude Sonnet",
+  "claude-haiku": "Claude Haiku",
+  "gemini-pro": "Gemini Pro",
+  "mistral": "Mistral",
 };
 
 function scoreColor(score: number): string {
@@ -85,6 +87,7 @@ function fmt(score: number | null): string {
 export default function DashboardPage() {
   const router = useRouter();
 
+  const [auditId, setAuditId] = useState<string | null>(null);
   const [brandName, setBrandName] = useState("");
   const [scores, setScores] = useState<ScoreEntry[]>([]);
   const [responses, setResponses] = useState<LlmResponse[]>([]);
@@ -93,11 +96,12 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const auditId = localStorage.getItem("llmv_current_audit");
+    const storedAuditId = localStorage.getItem("llmv_current_audit");
     const name = localStorage.getItem("llmv_brand_name") ?? "";
+    setAuditId(storedAuditId);
     setBrandName(name);
 
-    if (!auditId) {
+    if (!storedAuditId) {
       router.push("/step-1");
       return;
     }
@@ -105,9 +109,9 @@ export default function DashboardPage() {
     const load = async () => {
       try {
         const [statusRes, scoreRes, responsesRes] = await Promise.all([
-          fetch(`/api/audit/${auditId}/status`),
-          fetch(`/api/audit/${auditId}/score`),
-          fetch(`/api/audit/${auditId}/responses`),
+          fetch(`/api/audit/${storedAuditId}/status`),
+          fetch(`/api/audit/${storedAuditId}/score`),
+          fetch(`/api/audit/${storedAuditId}/responses`),
         ]);
 
         if (!statusRes.ok || !scoreRes.ok || !responsesRes.ok) {
@@ -151,6 +155,16 @@ export default function DashboardPage() {
     } else {
       existing.push(r);
     }
+  }
+
+  async function handleRerun() {
+    if (!auditId) return;
+    try {
+      await fetch(`/api/audit/${auditId}/rerun`, { method: "POST" });
+    } catch {
+      // silent fail — user lands on step-1 regardless
+    }
+    router.push("/step-1");
   }
 
   // --------------------------------------------------------------------------
@@ -360,13 +374,13 @@ export default function DashboardPage() {
 
         {/* Footer CTAs */}
         <div className="flex flex-wrap gap-3 pb-10">
-          <Button disabled className="cursor-not-allowed opacity-50">
+          <Button onClick={() => router.push("/recommendations")}>
             Voir les recommandations
           </Button>
           <Button
             variant="outline"
             className="border-white/20 text-white hover:bg-white/10 hover:text-white"
-            onClick={() => router.push("/step-1")}
+            onClick={() => void handleRerun()}
           >
             Relancer un audit
           </Button>
