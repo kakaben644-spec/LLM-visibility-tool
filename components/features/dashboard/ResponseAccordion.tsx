@@ -32,7 +32,9 @@ interface PromptGroup {
 const LLM_ORDER: Array<{ key: string; label: string }> = [
   { key: "gpt-4o", label: "GPT-4o" },
   { key: "claude-sonnet", label: "Claude Sonnet" },
+  { key: "claude-haiku", label: "Claude Haiku" },
   { key: "gemini-pro", label: "Gemini Pro" },
+  { key: "mistral", label: "Mistral" },
 ];
 
 function truncate(text: string, max: number): string {
