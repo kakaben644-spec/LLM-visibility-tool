@@ -159,10 +159,23 @@ export default function DashboardPage() {
 
   async function handleRerun() {
     if (!auditId) return;
+    const sessionToken = localStorage.getItem("llmv_session");
+    if (!sessionToken) {
+      router.push("/step-1");
+      return;
+    }
     try {
-      await fetch(`/api/audit/${auditId}/rerun`, { method: "POST" });
+      const res = await fetch(`/api/audit/${auditId}/rerun`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_token: sessionToken }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { data: { audit_id: string } };
+        localStorage.setItem("llmv_current_audit", json.data.audit_id);
+      }
     } catch {
-      // silent fail — user lands on step-1 regardless
+      // silent fail — redirect regardless
     }
     router.push("/step-1");
   }
