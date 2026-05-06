@@ -22,9 +22,8 @@ interface ScoreEntry {
   mention_rate: number;
   avg_position: number | null;
   sentiment_score: number | null;
-  score_gpt4o: number | null;
-  score_claude: number | null;
-  score_gemini: number | null;
+  score_claude_haiku: number | null;
+  score_mistral: number | null;
 }
 
 interface LlmResponse {
@@ -55,21 +54,15 @@ function deriveRecommendations(brandScore: ScoreEntry): string[] {
     );
   }
 
-  if (brandScore.score_gpt4o !== null && brandScore.score_gpt4o < 30) {
+  if (brandScore.score_claude_haiku !== null && brandScore.score_claude_haiku < 30) {
     recs.push(
-      "GPT-4o ne vous mentionne pas. Ciblez les sources d'entraînement OpenAI : blog officiel, documentation publique, partenariats médias."
+      "Claude Haiku ne vous mentionne pas. Anthropic valorise les contenus structurés et factuels. Publiez des études de cas détaillées et de la documentation publique."
     );
   }
 
-  if (brandScore.score_claude !== null && brandScore.score_claude < 30) {
+  if (brandScore.score_mistral !== null && brandScore.score_mistral < 30) {
     recs.push(
-      "Claude ne vous mentionne pas. Anthropic valorise les contenus structurés et factuels. Publiez des études de cas détaillées."
-    );
-  }
-
-  if (brandScore.score_gemini !== null && brandScore.score_gemini < 30) {
-    recs.push(
-      "Gemini ne vous mentionne pas. Renforcez votre présence sur les propriétés Google : Search, YouTube, Google Business."
+      "Mistral ne vous mentionne pas. Renforcez votre présence sur des sources francophones structurées : presse spécialisée, Wikipedia, forums professionnels."
     );
   }
 
@@ -199,8 +192,7 @@ export default function RecommendationsPage() {
         {/* Footer CTA */}
         <div className="pb-10">
           <Button
-            variant="outline"
-            className="border-white/20 text-white hover:bg-white/10 hover:text-white"
+            className="border border-white/20 bg-transparent text-white hover:bg-white/10"
             onClick={() => router.push("/dashboard")}
           >
             Retour au dashboard

@@ -28,9 +28,8 @@ interface ScoreEntry {
   mention_rate: number;
   avg_position: number | null;
   sentiment_score: number | null;
-  score_gpt4o: number | null;
-  score_claude: number | null;
-  score_gemini: number | null;
+  score_claude_haiku: number | null;
+  score_mistral: number | null;
 }
 
 interface LlmResponse {
@@ -282,9 +281,8 @@ export default function DashboardPage() {
                     <tr className="border-b border-white/10 text-white/40">
                       <th className="pb-3 text-left font-medium">Entité</th>
                       <th className="pb-3 text-right font-medium">Score</th>
-                      <th className="pb-3 text-right font-medium">GPT-4o</th>
-                      <th className="pb-3 text-right font-medium">Claude</th>
-                      <th className="pb-3 text-right font-medium">Gemini</th>
+                      <th className="pb-3 text-right font-medium">Claude Haiku</th>
+                      <th className="pb-3 text-right font-medium">Mistral</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -310,13 +308,10 @@ export default function DashboardPage() {
                           {s.total_score}
                         </td>
                         <td className="py-3 text-right text-white/60">
-                          {fmt(s.score_gpt4o)}
+                          {fmt(s.score_claude_haiku)}
                         </td>
                         <td className="py-3 text-right text-white/60">
-                          {fmt(s.score_claude)}
-                        </td>
-                        <td className="py-3 text-right text-white/60">
-                          {fmt(s.score_gemini)}
+                          {fmt(s.score_mistral)}
                         </td>
                       </tr>
                     ))}

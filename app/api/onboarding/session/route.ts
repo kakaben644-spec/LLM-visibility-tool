@@ -139,7 +139,7 @@ export async function PATCH(req: NextRequest) {
 
     const { error, count } = await supabase
       .from("onboarding_sessions")
-      .update(updatePayload)
+      .update(updatePayload, { count: "exact" })
       .eq("session_token", session_token)
       .eq("completed", false); // Ne pas modifier une session déjà terminée
 

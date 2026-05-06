@@ -34,9 +34,8 @@ interface ScoreEntry {
   mention_rate: number;
   avg_position: number | null;
   sentiment_score: number | null;
-  score_gpt4o: number | null;
-  score_claude: number | null;
-  score_gemini: number | null;
+  score_claude_haiku: number | null;
+  score_mistral: number | null;
 }
 
 interface MentionItem {
@@ -153,9 +152,8 @@ export async function GET(
         mention_rate,
         avg_position: avg_position !== null ? Math.round(avg_position * 10) / 10 : null,
         sentiment_score: null,
-        score_gpt4o: calcLlmScore("gpt-4o"),
-        score_claude: calcLlmScore("claude-sonnet"),
-        score_gemini: calcLlmScore("gemini-pro"),
+        score_claude_haiku: calcLlmScore("claude-haiku"),
+        score_mistral: calcLlmScore("mistral"),
       });
     }
 

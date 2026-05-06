@@ -183,11 +183,38 @@ export async function POST(req: NextRequest) {
       return databaseError("Impossible de créer l'audit.");
     }
 
-    const prompts = (insertedPrompts as PromptInserted[]).map((p) => ({
-      id: p.id,
-      text: p.text,
-      category: p.category,
-    }));
+    const prompts: Array<{ id: string; text: string; category: string | null }> =
+      (insertedPrompts as PromptInserted[]).map((p) => ({
+        id: p.id,
+        text: p.text,
+        category: p.category,
+      }));
+
+    // Inject one "Comparatif" prompt per competitor so competitor names appear
+    // in LLM responses and their mention scores are non-zero.
+    if (parsedCompetitors.length > 0) {
+      const { data: compPrompts } = await supabase
+        .from("prompts")
+        .insert(
+          parsedCompetitors.map((c) => ({
+            brand_id: brandId,
+            text: `Comment ${session.brand_name} se compare-t-il à ${c.name} selon les intelligences artificielles ?`,
+            category: "Comparatif",
+            is_custom: false,
+          }))
+        )
+        .select("id, text, category");
+
+      if (compPrompts) {
+        prompts.push(
+          ...(compPrompts as PromptInserted[]).map((p) => ({
+            id: p.id,
+            text: p.text,
+            category: p.category,
+          }))
+        );
+      }
+    }
 
     return successResponse({ audit_id: audit.id, brand_id: brandId, prompts }, 201);
   } catch (err) {
