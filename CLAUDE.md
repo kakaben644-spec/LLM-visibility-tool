@@ -118,6 +118,7 @@ Ce script (`start-dev.sh`) lit les clés depuis `.env.local` et les exporte avan
 - Upstash Redis retiré, rate-limit.ts conservé mais inactif ✅
 - US-11 Déploiement Vercel ✅ (live sur project-n1zex.vercel.app)
 - US-B1 Bugs critiques dashboard ✅ terminé (PR #2 mergé)
+- US-B2 Bugfix pipeline + onboarding ✅ terminé (commit 7405d04)
 - US-15 Landing page publique GEO Doctor — À faire
 - US-12 Authentification Clerk + blocage emails jetables — À faire
 
@@ -141,21 +142,34 @@ Ce script (`start-dev.sh`) lit les clés depuis `.env.local` et les exporte avan
 - Met à jour `llmv_current_audit` avec le nouvel `audit_id` retourné
 - Redirige vers `/step-1` après rerun
 
-## Bugs connus post-US-B1 (backlog)
-### Bug pipeline — Concurrents tous à 0 dans le benchmark
-- Symptôme : scores brand OK, tous les concurrents affichent 0
-- Cause suspectée : `mention_results` non créés pour `entity_type = "competitor"`
-  ou calcul de score qui ignore les concurrents
-- À investiguer : `lib/utils/score.ts` + `lib/utils/mentions.ts` + pipeline `run-llm`
-- Priorité haute — bloque la valeur produit du benchmark
+## Bugs résolus post-US-B1 — US-B2 (commit 7405d04)
 
-### Bug UI — Bouton "Retour au dashboard" invisible sur /recommendations
+### Fix A ✅ — Colonnes per-LLM toujours "—" dans le benchmark
+- Cause : `score/route.ts` cherchait `"gpt-4o"`, `"claude-sonnet"`, `"gemini-pro"` mais la pipeline insère `"claude-haiku"` et `"mistral"` en DB
+- Fix : renommage des clés en `score_claude_haiku` / `score_mistral` dans `score/route.ts`
+- Propagé dans : `dashboard/page.tsx` (headers + ScoreEntry), `recommendations/page.tsx` (ScoreEntry + deriveRecommendations)
+
+### Fix B ✅ — PATCH session silencieux en cas de session introuvable
+- Cause : Supabase `.update()` sans `{ count: "exact" }` renvoie `count = null`, jamais 0
+- Fix : `{ count: "exact" }` ajouté → le guard `count === 0` fonctionne désormais
+
+### Fix C ✅ — Concurrents toujours à 0 dans le benchmark
+- Cause : les prompts générés en step-2 sont centrés sur la marque → LLMs ne mentionnent jamais les concurrents
+- Fix : `audit/start/route.ts` injecte un prompt "Comparatif" par concurrent (`Comment [brand] se compare-t-il à [concurrent] ?`) après insertion des prompts classiques
+- Ces prompts sont envoyés aux LLMs lors du scan → les noms de concurrents apparaissent dans les réponses
+
+### Fix D ✅ — Bouton "Retour au dashboard" invisible sur /recommendations
 - Cause : `variant="outline"` → texte blanc sur fond blanc
-- Fix trivial à inclure dans la prochaine PR touchant `/recommendations`
+- Fix : remplacé par `className` explicite avec `text-white bg-transparent border border-white/20`
 
-### Page /recommendations — logique reco insuffisante
-- Avec score = 100/100, aucune condition n'est vraie → seule reco "30 jours" affichée
-- À retravailler quand vrais scores LLM par modèle disponibles en DB
+### Logique reco /recommendations — toujours insuffisante (backlog V2)
+- Avec score = 100/100, seule reco "30 jours" affichée
+- À retravailler avec vrais scores LLM par modèle
+
+## Architecture produit — Notes importantes post-US-B2
+- `score/route.ts` : les clés per-LLM sont `score_claude_haiku` et `score_mistral` (ne plus jamais utiliser gpt-4o/claude-sonnet/gemini-pro)
+- `audit/start/route.ts` : injecte N prompts Comparatifs (1 par concurrent) à la fin du tableau `prompts` retourné — le scan les traite normalement
+- `session/route.ts` PATCH : nécessite `{ count: "exact" }` sur `.update()` pour que le guard 404 fonctionne
 
 ## Points techniques importants (bugs résolus)
 - `selected_prompts` doit être écrit dans step-2 en même temps que `generated_prompts`
