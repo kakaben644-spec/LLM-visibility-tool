@@ -13,7 +13,8 @@ Nom technique du repo : LLM-visibility-tool (inchangé).
 
 ## Architecture des dossiers
 
-/app/(marketing)/page.tsx           ← stub redirect → /step-1 (landing page à construire en US-15)
+/app/(marketing)/page.tsx           ← landing page publique GEO Doctor (US-15 ✅)
+/app/(marketing)/layout.tsx        ← layout marketing : charge Sora + DM_Sans
 /app/(onboarding)/step-1/page.tsx
 /app/(onboarding)/step-2/page.tsx
 /app/(onboarding)/step-3/page.tsx
@@ -119,7 +120,7 @@ Ce script (`start-dev.sh`) lit les clés depuis `.env.local` et les exporte avan
 - US-11 Déploiement Vercel ✅ (live sur project-n1zex.vercel.app)
 - US-B1 Bugs critiques dashboard ✅ terminé (PR #2 mergé)
 - US-B2 Bugfix pipeline + onboarding ✅ terminé (commit 7405d04)
-- US-15 Landing page publique GEO Doctor — À faire
+- US-15 Landing page publique GEO Doctor ✅ terminé (commit eb7ee19a)
 - US-12 Authentification Clerk + blocage emails jetables — À faire
 
 ## US-B1 — Ce qui a été corrigé (PR #2, mergé sur main)
