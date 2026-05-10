@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { z } from "zod";
 
 import { getSupabaseAdmin } from "@/lib/supabase/server";
@@ -28,10 +29,34 @@ export async function POST(req: Request) {
 
   const { session_token } = parsed.data;
 
+  // Retrieve Clerk user data to upsert in our users table
+  const client = await clerkClient();
+  const clerkUser = await client.users.getUser(userId);
+  const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
+  const fullName =
+    `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || null;
+
   const supabase = getSupabaseAdmin();
+
+  // Upsert user row (safety net — webhook may not have fired yet)
+  const { data: dbUser, error: upsertError } = await supabase
+    .from("users")
+    .upsert(
+      { clerk_id: userId, email, full_name: fullName },
+      { onConflict: "clerk_id" }
+    )
+    .select("id")
+    .single();
+
+  if (upsertError || !dbUser) {
+    console.error("[migrate-session] Upsert user error:", upsertError?.message);
+    return successResponse({ ok: false, error: "Impossible de créer l'utilisateur" });
+  }
+
+  // Call migrate_session with internal UUID
   const { error } = await supabase.rpc("migrate_session", {
     p_session_token: session_token,
-    p_user_id: userId,
+    p_user_id: dbUser.id,
   });
 
   if (error) {
