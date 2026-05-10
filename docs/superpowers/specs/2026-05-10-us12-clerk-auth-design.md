@@ -114,6 +114,7 @@ Page intermédiaire invisible (spinner), exécute :
 2. Récupération du `userId` Clerk via `useAuth()`
 3. Appel `POST /api/auth/migrate-session` avec `{ session_token, user_id }`
 4. Redirect vers `/recommendations` (toujours, succès ou échec — migration best-effort)
+   - Si `llmv_session` est absent de localStorage (ex : utilisateur sans audit préalable) → skip l'appel API, redirect directement vers `/recommendations`
 
 ### `POST /api/auth/migrate-session`
 - Vérifie l'auth Clerk server-side via `auth()`
