@@ -24,7 +24,7 @@ const recItemSchema = z.object({
   title: z.string().max(80),
   description: z.string().max(300),
   priority: z.enum(["high", "medium", "low"]),
-  category: z.enum(["content", "technical", "reputation", "seo"]),
+  category: z.enum(["content", "technical", "positioning", "competitors", "seo"]),
   llm_target: z.enum(["claude-haiku", "mistral", "all"]),
 });
 const recsSchema = z.array(recItemSchema).min(1).max(6);
@@ -119,7 +119,8 @@ export async function POST(req: Request) {
 
   const positions = rows
     .filter((r) => r.position !== null)
-    .map((r) => r.position as number);
+    .map((r) => Number(r.position))
+    .filter((p) => !isNaN(p));
   const avg_position =
     positions.length > 0
       ? Math.round(positions.reduce((a, b) => a + b, 0) / positions.length)
@@ -159,10 +160,12 @@ export async function POST(req: Request) {
       .select("id, response_text, llm_name")
       .in("id", responseIds);
 
-    absentTexts = (responseRows ?? []).map((r) => ({
-      llm_name: r.llm_name as string,
-      response_text: r.response_text as string,
-    }));
+    absentTexts = (responseRows ?? [])
+      .filter((r) => r.response_text !== null && r.llm_name !== null)
+      .map((r) => ({
+        llm_name: r.llm_name as string,
+        response_text: r.response_text as string,
+      }));
   }
 
   // 5. Build prompt
@@ -193,7 +196,7 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans markdown ni texte autour :
     "title": "string court (max 60 chars)",
     "description": "string actionnable (max 200 chars)",
     "priority": "high" | "medium" | "low",
-    "category": "content" | "technical" | "reputation" | "seo",
+    "category": "content" | "technical" | "positioning" | "competitors" | "seo",
     "llm_target": "claude-haiku" | "mistral" | "all"
   }
 ]`;
@@ -232,7 +235,11 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans markdown ni texte autour :
   const items = validationResult.data;
 
   // 9. Delete existing recommendations for this audit (regeneration support)
-  await supabase.from("recommendations").delete().eq("audit_id", audit_id);
+  const { error: deleteErr } = await supabase
+    .from("recommendations")
+    .delete()
+    .eq("audit_id", audit_id);
+  if (deleteErr) return databaseError(deleteErr.message);
 
   // 10. Insert new recommendations
   const toInsert = items.map((item) => ({
@@ -246,8 +253,9 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans markdown ni texte autour :
     .insert(toInsert)
     .select("id, title, description, priority, category, llm_target, is_done");
 
-  if (insertErr || !inserted) {
-    return databaseError(insertErr?.message);
+  if (insertErr) return databaseError(insertErr.message);
+  if (!inserted || inserted.length === 0) {
+    return errorResponse("Aucune recommandation insérée", "DATABASE_ERROR", 500);
   }
 
   const postPriorityOrder: Record<string, number> = { high: 1, medium: 2, low: 3 };
