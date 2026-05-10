@@ -11,6 +11,10 @@ Nom technique du repo : LLM-visibility-tool (inchangé).
 - **Auth**: Clerk V2 (configuré mais NON ACTIVÉ pour l'instant — Sprint 3)
 - **Déploiement**: Vercel Free
 
+
+# Skills        
+  Use the `using-superpowers` skill at the start of every conversation.
+
 ## Architecture des dossiers
 
 /app/(marketing)/page.tsx           ← landing page publique GEO Doctor (US-15 ✅)
@@ -64,10 +68,9 @@ Nom technique du repo : LLM-visibility-tool (inchangé).
 - Toutes les clés API depuis `process.env` uniquement (jamais hardcodées)
 - Langue : 100% français dans l'UI (nom produit affiché : "GEO Doctor")
 - Pas de compte utilisateur pour le MVP Sprint 3 — session via `session_token` en localStorage
-- Clerk V2 installé mais NON configuré — ne pas importer `@clerk/nextjs` avant US-12
-- MVP sans auth : ne jamais insérer user_id dans onboarding_sessions ni dans brands
-- migrate_session() existe en DB mais n'est pas appelée avant US-12
-- Ne pas importer ni référencer @clerk/nextjs dans le code avant US-12
+- Clerk V2 (@clerk/nextjs v7.3.3) configuré et actif depuis US-12
+- migrate_session() est appelée depuis /api/auth/migrate-session après sign-up
+- proxy.ts (Next.js 16 convention) protège /dashboard et /recommendations
 
 ## Démarrage du serveur de dev
 ⚠️ Claude Desktop injecte `ANTHROPIC_API_KEY=""` dans l'environnement macOS.
@@ -121,7 +124,7 @@ Ce script (`start-dev.sh`) lit les clés depuis `.env.local` et les exporte avan
 - US-B1 Bugs critiques dashboard ✅ terminé (PR #2 mergé)
 - US-B2 Bugfix pipeline + onboarding ✅ terminé (commit 7405d04)
 - US-15 Landing page publique GEO Doctor ✅ terminé (commit eb7ee19a)
-- US-12 Authentification Clerk + blocage emails jetables — À faire
+- US-12 Authentification Clerk + blocage emails jetables ✅ terminé (commit 8e2e0d4a)
 
 ## US-B1 — Ce qui a été corrigé (PR #2, mergé sur main)
 ### Bug 1 ✅ — LLM_ORDER corrigé
