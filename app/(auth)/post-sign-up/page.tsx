@@ -33,7 +33,7 @@ export default function PostSignUpPage() {
         localStorage.removeItem("llmv_session");
       }
 
-      router.replace("/recommendations");
+      router.replace("/recommandations");
     };
 
     migrate();
