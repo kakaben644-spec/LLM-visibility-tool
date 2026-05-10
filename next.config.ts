@@ -18,11 +18,11 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "font-src 'self'",
-      "connect-src 'self' https://*.supabase.co https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://*.upstash.io",
+      "connect-src 'self' https://*.supabase.co https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://*.upstash.io https://*.clerk.accounts.dev https://api.clerk.com https://clerk.*.lcl.dev",
       "frame-ancestors 'none'",
     ].join("; "),
   },

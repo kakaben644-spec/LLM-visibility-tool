@@ -30,6 +30,7 @@ export default function PostSignUpPage() {
         }).catch(() => {
           // Migration best-effort : on redirige quoi qu'il arrive
         });
+        localStorage.removeItem("llmv_session");
       }
 
       router.replace("/recommendations");

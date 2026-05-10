@@ -7,7 +7,8 @@ interface ClerkUserCreatedEvent {
   type: "user.created";
   data: {
     id: string;
-    email_addresses: Array<{ email_address: string }>;
+    primary_email_address_id: string;
+    email_addresses: Array<{ id: string; email_address: string }>;
   };
 }
 
@@ -46,7 +47,9 @@ export async function POST(req: Request) {
     return new Response("Event ignoré", { status: 200 });
   }
 
-  const primaryEmail = evt.data.email_addresses[0]?.email_address;
+  const primaryEmail = evt.data.email_addresses.find(
+    (e) => e.id === evt.data.primary_email_address_id
+  )?.email_address ?? evt.data.email_addresses[0]?.email_address;
   if (!primaryEmail) {
     return new Response("Email introuvable", { status: 200 });
   }
@@ -55,8 +58,13 @@ export async function POST(req: Request) {
     console.warn(
       `[clerk-webhook] Email jetable détecté : ${primaryEmail} — suppression compte ${evt.data.id}`
     );
-    const client = await clerkClient();
-    await client.users.deleteUser(evt.data.id);
+    try {
+      const client = await clerkClient();
+      await client.users.deleteUser(evt.data.id);
+    } catch (err) {
+      console.error("[clerk-webhook] Erreur suppression compte:", err);
+      return new Response("Erreur suppression", { status: 500 });
+    }
   }
 
   return new Response("OK", { status: 200 });

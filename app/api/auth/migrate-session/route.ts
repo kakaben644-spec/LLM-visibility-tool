@@ -32,7 +32,10 @@ export async function POST(req: Request) {
   // Retrieve Clerk user data to upsert in our users table
   const client = await clerkClient();
   const clerkUser = await client.users.getUser(userId);
-  const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
+  const primaryEmail = clerkUser.emailAddresses.find(
+    (e) => e.id === clerkUser.primaryEmailAddressId
+  );
+  const email = primaryEmail?.emailAddress ?? "";
   const fullName =
     `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || null;
 
@@ -50,7 +53,7 @@ export async function POST(req: Request) {
 
   if (upsertError || !dbUser) {
     console.error("[migrate-session] Upsert user error:", upsertError?.message);
-    return successResponse({ ok: false, error: "Impossible de créer l'utilisateur" });
+    return errorResponse("Impossible de créer l'utilisateur", "DATABASE_ERROR", 500);
   }
 
   // Call migrate_session with internal UUID
@@ -61,7 +64,7 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error("[migrate-session] Supabase RPC error:", error.message);
-    return successResponse({ ok: false, error: error.message });
+    return errorResponse(error.message, "DATABASE_ERROR", 500);
   }
 
   return successResponse({ ok: true });
