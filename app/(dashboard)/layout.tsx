@@ -16,9 +16,7 @@ export default async function DashboardLayout({
       ?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? "";
 
   const userProps = {
-    firstName: user.firstName ?? "",
     email: primaryEmail,
-    imageUrl: user.imageUrl,
   };
 
   return (

@@ -24,7 +24,7 @@ Nom technique du repo : LLM-visibility-tool (inchangé).
 /app/(onboarding)/step-3/page.tsx
 /app/(onboarding)/scanning/page.tsx
 /app/(dashboard)/dashboard/page.tsx
-/app/recommendations/page.tsx       ← page créée en US-B1, masquée derrière /sign-up pour l'instant
+/app/(dashboard)/recommandations/page.tsx  ← page migréé depuis /recommendations en US-13
 
 /app/api/onboarding/session/route.ts
 /app/api/scrape/route.ts
@@ -70,7 +70,7 @@ Nom technique du repo : LLM-visibility-tool (inchangé).
 - Pas de compte utilisateur pour le MVP Sprint 3 — session via `session_token` en localStorage
 - Clerk V2 (@clerk/nextjs v7.3.3) configuré et actif depuis US-12
 - migrate_session() est appelée depuis /api/auth/migrate-session après sign-up
-- proxy.ts (Next.js 16 convention) protège /dashboard et /recommendations
+- proxy.ts (Next.js 16 convention) protège /dashboard et /recommandations
 
 ## Démarrage du serveur de dev
 ⚠️ Claude Desktop injecte `ANTHROPIC_API_KEY=""` dans l'environnement macOS.

@@ -12,9 +12,7 @@ import {
 import { UserButton } from "@clerk/nextjs";
 
 interface UserProps {
-  firstName: string;
   email: string;
-  imageUrl: string;
 }
 
 const NAV_ITEMS = [

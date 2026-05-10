@@ -136,7 +136,7 @@ export default function RecommendationsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0F0F1A]">
+      <div className="flex h-full items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#6B54FA] border-t-transparent" />
       </div>
     );
@@ -144,7 +144,7 @@ export default function RecommendationsPage() {
 
   if (error) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[#0F0F1A] text-white">
+      <div className="flex h-full flex-col items-center justify-center gap-4 text-white">
         <p className="text-lg font-semibold">Erreur de chargement</p>
         <p className="text-sm text-white/60">{error}</p>
         <Button onClick={() => router.push("/step-1")}>Recommencer</Button>
@@ -157,7 +157,7 @@ export default function RecommendationsPage() {
   // --------------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-[#0F0F1A] text-white">
+    <div className="text-white">
       <div className="mx-auto max-w-4xl space-y-8 px-4 py-10">
 
         {/* Header */}
