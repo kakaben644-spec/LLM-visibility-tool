@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import type { AuditRow } from "@/app/api/history/route";
 
 import { Button } from "@/components/ui/button";
 
@@ -17,16 +18,6 @@ interface ScoreEntry {
   avg_position: number | null;
   score_claude_haiku: number | null;
   score_mistral: number | null;
-}
-
-interface AuditRow {
-  id: string;
-  status: string;
-  created_at: string;
-  brand_id: string;
-  brand_name: string;
-  total_score: number | null;
-  mention_rate: number | null;
 }
 
 interface DetailData {
@@ -53,6 +44,18 @@ function formatDate(iso: string): string {
     minute: "2-digit",
   });
 }
+
+const BENCHMARK = [
+  { label: "Claude Haiku", key: "score_claude_haiku" as const },
+  { label: "Mistral", key: "score_mistral" as const },
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  completed: "Terminé",
+  running: "En cours…",
+  pending: "En attente",
+  failed: "Échoué",
+};
 
 // ---------------------------------------------------------------------------
 // Page
@@ -148,8 +151,9 @@ export default function HistoriqueDetailPage() {
       <div className="text-white">
         <div className="mx-auto max-w-2xl px-4 py-10 space-y-4">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push("/historique")}
             className="text-xs text-white/40 hover:text-white transition-colors"
+            aria-label="Retour à l'historique"
           >
             ← Retour à l'historique
           </button>
@@ -163,19 +167,15 @@ export default function HistoriqueDetailPage() {
   // Render
   // --------------------------------------------------------------------------
 
-  const BENCHMARK = [
-    { label: "Claude Haiku", score: detail.score_claude_haiku },
-    { label: "Mistral", score: detail.score_mistral },
-  ];
-
   return (
     <div className="text-white">
       <div className="mx-auto max-w-2xl space-y-6 px-4 py-10">
 
         {/* Back */}
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push("/historique")}
           className="text-xs text-white/40 hover:text-white transition-colors"
+          aria-label="Retour à l'historique"
         >
           ← Retour à l'historique
         </button>
@@ -184,7 +184,7 @@ export default function HistoriqueDetailPage() {
         <div>
           <h1 className="text-2xl font-bold">{detail.brand_name}</h1>
           <p className="mt-1 text-sm text-white/50">
-            Audit du {formatDate(detail.created_at)} · Terminé
+            Audit du {formatDate(detail.created_at)} · {STATUS_LABEL[detail.status] ?? detail.status}
           </p>
         </div>
 
@@ -212,7 +212,7 @@ export default function HistoriqueDetailPage() {
                 Position moyenne
               </div>
               <div className="mt-0.5 text-sm font-semibold text-white">
-                {detail.avg_position !== null ? detail.avg_position : "—"}
+                {detail.avg_position !== null ? Math.round(detail.avg_position) : "—"}
               </div>
             </div>
           </div>
@@ -223,21 +223,24 @@ export default function HistoriqueDetailPage() {
           <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white/80">
             Benchmark par LLM
           </div>
-          {BENCHMARK.map(({ label, score }) => (
-            <div
-              key={label}
-              className="flex items-center justify-between border-b border-white/5 px-4 py-3 last:border-b-0"
-            >
-              <span className="text-sm text-white/70">{label}</span>
-              <span
-                className={`text-sm font-bold ${
-                  score !== null ? "text-[#6B54FA]" : "text-white/20"
-                }`}
+          {BENCHMARK.map(({ label, key }) => {
+            const score = detail[key];
+            return (
+              <div
+                key={label}
+                className="flex items-center justify-between border-b border-white/5 px-4 py-3 last:border-b-0"
               >
-                {score !== null ? score : "—"}
-              </span>
-            </div>
-          ))}
+                <span className="text-sm text-white/70">{label}</span>
+                <span
+                  className={`text-sm font-bold ${
+                    score !== null ? "text-[#6B54FA]" : "text-white/20"
+                  }`}
+                >
+                  {score !== null ? score : "—"}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         {/* CTA */}
