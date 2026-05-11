@@ -16,6 +16,7 @@ export async function fetchSerperContext(brandName: string): Promise<string> {
         "X-API-KEY": process.env.SERPER_API_KEY ?? "",
       },
       body: JSON.stringify({ q: brandName, num: 5, hl: "fr" }),
+      signal: AbortSignal.timeout(3000),
     });
 
     if (!response.ok) {
