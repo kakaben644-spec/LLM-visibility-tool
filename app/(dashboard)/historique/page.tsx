@@ -2,20 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-
-// ---------------------------------------------------------------------------
-// Types — mirrors AuditRow from app/api/history/route.ts
-// ---------------------------------------------------------------------------
-
-interface AuditRow {
-  id: string;
-  status: "pending" | "running" | "completed" | "failed";
-  created_at: string;
-  brand_id: string;
-  brand_name: string;
-  total_score: number | null;
-  mention_rate: number | null;
-}
+import type { AuditRow } from "@/app/api/history/route";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -177,6 +164,7 @@ export default function HistoriquePage() {
                     <Link
                       href={`/historique/${audit.id}`}
                       className="text-sm text-white/40 hover:text-white transition-colors"
+                      aria-label="Voir l'audit"
                     >
                       →
                     </Link>
